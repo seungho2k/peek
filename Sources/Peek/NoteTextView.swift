@@ -55,8 +55,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     func load(markdown: String) {
         guard let storage = textStorage else { return }
         let oldSelection = selectedRange()
-        storage.setAttributedString(NoteFormat.parse(markdown))
-        NoteFormat.restyle(storage, range: NSRange(location: 0, length: storage.length))
+        storage.setAttributedString(NoteFormat.parse(markdown))  // restyled via willProcessEditing
         pendingNormalizeRange = nil
         undoManager?.removeAllActions()
         let loc = min(oldSelection.location, storage.length)

@@ -17,6 +17,7 @@ enum SelfTest {
         images()
         koreanComposition()
         lineMetrics()
+        koreanMidLine()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -287,6 +288,23 @@ enum SelfTest {
         expect("line height stable when typing latin after hangul", hangul.height == mixed.height && hangul.baseline == mixed.baseline)
         expect("hangul and latin lines same height", hangul.height == latin.height && hangul.baseline == latin.baseline)
         expect("bold hangul line same height", bold.height == hangul.height)
+    }
+
+    /// Composing Hangul in the middle of a long (wrapped) line must stay in place.
+    private static func koreanMidLine() {
+        let long = String(repeating: "가나다라마바사아자차카타파하 ", count: 6)
+        let tv = makeView(long)
+        tv.layoutManager!.ensureLayout(for: tv.textContainer!)
+        let mid = 20
+        caret(tv, mid)
+        let nf = NSRange(location: NSNotFound, length: 0)
+        for s in ["ㅎ", "하", "한"] { tv.setMarkedText(s, selectedRange: NSRange(location: 1, length: 0), replacementRange: nf) }
+        tv.setMarkedText("한", selectedRange: NSRange(location: 1, length: 0), replacementRange: nf)
+        tv.insertText("한", replacementRange: nf)
+        for s in ["ㄱ", "그", "글"] { tv.setMarkedText(s, selectedRange: NSRange(location: 1, length: 0), replacementRange: nf) }
+        tv.insertText("글", replacementRange: nf)
+        let expected = (long as NSString).replacingCharacters(in: NSRange(location: mid, length: 0), with: "한글")
+        check("hangul typed mid long line stays in place", tv, expected)
     }
 
     private static func undo() {

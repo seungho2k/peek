@@ -180,31 +180,78 @@ enum NoteFormat {
     // MARK: Styling
 
     /// Re-derives fonts/colors for every line touching `range`.
+    ///
+    /// Only touches attributes that actually differ: this runs inside text storage editing,
+    /// and every change widens the storage's edited range — NSTextView places the caret at
+    /// the end of that range when an input method commits text, so restyling a whole line
+    /// unconditionally would throw the caret to the end of the line mid-composition.
+    /// Fonts are compared by size and weight only, so fallback fonts that AppKit substitutes
+    /// (e.g. Apple SD Gothic Neo for Hangul) are left alone.
     static func restyle(_ storage: NSTextStorage, range: NSRange) {
         let ns = storage.string as NSString
         guard ns.length > 0 else { return }
-        let full = ns.paragraphRange(for: NSRange(location: min(range.location, ns.length), length: min(range.length, ns.length - min(range.location, ns.length))))
+        let start = min(range.location, ns.length)
+        let full = ns.paragraphRange(for: NSRange(location: start, length: min(range.length, ns.length - start)))
         for line in lineRanges(in: ns, covering: full) {
             let withBreak = NSRange(location: line.location, length: min(line.length + 1, ns.length - line.location))
-            storage.addAttributes(baseAttributes, range: withBreak)
-            if NSMaxRange(line) < ns.length {
-                storage.removeAttribute(.peekBold, range: NSRange(location: NSMaxRange(line), length: 1))
+            var bold = false
+            var prefixLen = 0
+            if kind(of: storage, line: line) == .text && isBold(storage, line: line) {
+                bold = true
+                prefixLen = listPrefixLength(ns.substring(with: line))
             }
+            let boldContent = bold ? NSRange(location: line.location + prefixLen, length: line.length - prefixLen) : nil
 
-            switch kind(of: storage, line: line) {
-            case .rule:
-                storage.removeAttribute(.peekBold, range: line)
-            case .images:
-                storage.removeAttribute(.peekBold, range: line)
-            case .text:
-                guard isBold(storage, line: line) else { continue }
-                storage.addAttribute(.peekBold, value: true, range: line)
-                let prefixLen = listPrefixLength(ns.substring(with: line))
-                let content = NSRange(location: line.location + prefixLen, length: line.length - prefixLen)
-                if content.length > 0 { storage.addAttribute(.font, value: Theme.boldFont, range: content) }
+            ensureColor(storage, withBreak)
+            if let boldContent, boldContent.length > 0 {
+                ensureFont(storage, NSRange(location: line.location, length: prefixLen), bold: false)
+                ensureFont(storage, boldContent, bold: true)
+                let breakRange = NSRange(location: NSMaxRange(line), length: withBreak.length - line.length)
+                ensureFont(storage, breakRange, bold: false)
+            } else {
+                ensureFont(storage, withBreak, bold: false)
+            }
+            ensureBoldMark(storage, line, on: bold)
+            if withBreak.length > line.length {
+                ensureBoldMark(storage, NSRange(location: NSMaxRange(line), length: 1), on: false)
             }
         }
-        // Substitute fonts for characters the system font lacks (e.g. Hangul).
-        storage.fixFontAttribute(in: full)
+    }
+
+    private static func ensureFont(_ storage: NSTextStorage, _ range: NSRange, bold: Bool) {
+        guard range.length > 0 else { return }
+        var fixes: [NSRange] = []
+        storage.enumerateAttribute(.font, in: range) { value, r, _ in
+            guard let font = value as? NSFont,
+                  font.pointSize == Theme.fontSize,
+                  font.fontDescriptor.symbolicTraits.contains(.bold) == bold
+            else { fixes.append(r); return }
+        }
+        let target = bold ? Theme.boldFont : Theme.font
+        for r in fixes { storage.addAttribute(.font, value: target, range: r) }
+    }
+
+    private static func ensureColor(_ storage: NSTextStorage, _ range: NSRange) {
+        guard range.length > 0 else { return }
+        var fixes: [NSRange] = []
+        storage.enumerateAttribute(.foregroundColor, in: range) { value, r, _ in
+            if (value as? NSColor) !== Theme.text { fixes.append(r) }
+        }
+        for r in fixes { storage.addAttribute(.foregroundColor, value: Theme.text, range: r) }
+    }
+
+    private static func ensureBoldMark(_ storage: NSTextStorage, _ range: NSRange, on: Bool) {
+        guard range.length > 0 else { return }
+        var fixes: [NSRange] = []
+        storage.enumerateAttribute(.peekBold, in: range) { value, r, _ in
+            if (value != nil) != on { fixes.append(r) }
+        }
+        for r in fixes {
+            if on {
+                storage.addAttribute(.peekBold, value: true, range: r)
+            } else {
+                storage.removeAttribute(.peekBold, range: r)
+            }
+        }
     }
 }
