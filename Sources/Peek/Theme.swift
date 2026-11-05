@@ -44,7 +44,7 @@ enum Theme {
             ?? .systemFont(ofSize: fontSize)
     }
     static var boldFont: NSFont {
-        NSFont(name: "Pretendard-Bold", size: fontSize)
+        NSFont(name: "Pretendard-Black", size: fontSize)  // bold lines render in the Black weight
             ?? NSFont(name: "AppleSDGothicNeo-Bold", size: fontSize)
             ?? .boldSystemFont(ofSize: fontSize)
     }

@@ -36,4 +36,4 @@ swift build && .build/debug/Peek --selftest   # 헤드리스 에디터 테스트
 
 ## 폰트
 
-[Pretendard](https://github.com/orioncactus/pretendard) v1.3.9 (Regular, Bold)를 `Support/Fonts`에 포함한다. SIL Open Font License 1.1 — `Support/Fonts/LICENSE.txt`.
+[Pretendard](https://github.com/orioncactus/pretendard) v1.3.9 (Regular, Black)를 `Support/Fonts`에 포함한다. SIL Open Font License 1.1 — `Support/Fonts/LICENSE.txt`.
