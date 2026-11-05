@@ -30,11 +30,12 @@ struct SettingsView: View {
                     ForEach(PeekEdge.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                numberRow("숨김 여백", unit: "pt", value: $settings.hideMargin, range: 0...1000)
             }
 
             Section("애니메이션") {
-                durationRow("나올 때", value: $settings.slideInMs)
-                durationRow("들어갈 때", value: $settings.slideOutMs)
+                numberRow("나올 때", unit: "ms", value: $settings.slideInMs, range: 0...5000)
+                numberRow("들어갈 때", unit: "ms", value: $settings.slideOutMs, range: 0...5000)
             }
 
             Section {
@@ -67,13 +68,18 @@ struct SettingsView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func durationRow(_ title: String, value: Binding<Double>) -> some View {
-        LabeledContent(title) {
-            HStack {
-                Slider(value: value, in: 0...1000, step: 10)
-                Text("\(Int(value.wrappedValue)) ms")
-                    .monospacedDigit()
-                    .frame(width: 64, alignment: .trailing)
+    private func numberRow(_ title: String, unit: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
+        let clamped = Binding<Double>(
+            get: { value.wrappedValue },
+            set: { value.wrappedValue = min(max($0, range.lowerBound), range.upperBound).rounded() }
+        )
+        return LabeledContent(title) {
+            HStack(spacing: 4) {
+                TextField("", value: clamped, format: .number.grouping(.never))
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 64)
+                    .labelsHidden()
+                Text(unit).foregroundStyle(.secondary)
             }
         }
     }
@@ -135,21 +141,23 @@ final class ShortcutRecorder: ObservableObject {
         stop()
         isRecording = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            MainActor.assumeIsolated {
-                guard let self else { return event }
-                if event.keyCode == KeyCode.escape {
+            let keyCode = event.keyCode
+            let flags = event.modifierFlags
+            let consumed = MainActor.assumeIsolated { () -> Bool in
+                guard let self else { return false }
+                if keyCode == KeyCode.escape {
                     self.stop()
-                    return nil
+                    return true
                 }
-                let mods = event.modifierFlags.intersection([.command, .control, .option])
-                guard !mods.isEmpty else {
+                guard !flags.intersection([.command, .control, .option]).isEmpty else {
                     NSSound.beep()
-                    return nil
+                    return true
                 }
-                onRecord(Shortcut(event: event))
+                onRecord(Shortcut(keyCode: keyCode, modifiers: flags))
                 self.stop()
-                return nil
+                return true
             }
+            return consumed ? nil : event
         }
     }
 

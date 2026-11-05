@@ -22,8 +22,13 @@ final class PanelController: NSObject {
     private(set) var isPinned = false
     /// A mouse button went down inside the panel and is still held.
     private var pressBeganInside = false
-    /// Drag pasteboard change count at the last mouse-down anywhere, to detect file drags.
-    private var dragChangeCountAtMouseDown = NSPasteboard(name: .drag).changeCount
+    /// Polls the mouse while a button is held: during drag sessions (e.g. dragging a file
+    /// from Finder) mouse events don't reach our monitors.
+    private var pressPollTimer: Timer?
+    /// App that was active before the panel took focus.
+    private var previousApp: NSRunningApplication?
+    /// peek was activated by the panel (not, say, by the settings window).
+    private var activatedForPanel = false
 
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -172,8 +177,8 @@ final class PanelController: NSObject {
     private func handleMouse(_ event: NSEvent, local: Bool) {
         switch event.type {
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            dragChangeCountAtMouseDown = NSPasteboard(name: .drag).changeCount
             if local && event.window === panel { pressBeganInside = true }
+            startPressPolling()
             return
         case .leftMouseUp, .rightMouseUp, .otherMouseUp:
             if NSEvent.pressedMouseButtons == 0 { pressBeganInside = false }
@@ -189,31 +194,84 @@ final class PanelController: NSObject {
         let buttonsDown = NSEvent.pressedMouseButtons != 0
 
         if target == 0 {
-            // Hidden or sliding out: only the screen edge brings it back.
-            guard isAtEdge(loc, of: screen) else { return }
-            if !buttonsDown || isDraggingDroppableContent() { show() }
+            // Hidden or sliding out: only the screen edge brings it back (also mid-drag,
+            // so files can be dragged in).
+            if isAtEdge(loc, of: screen) { show() }
             return
         }
 
         if pressBeganInside && buttonsDown { return }  // e.g. selecting text or resizing
 
-        let inside = panel.frame.contains(loc) || isAtEdge(loc, of: screen)
-        if inside {
-            if !panel.isKeyWindow && !buttonsDown { panel.makeKey() }
+        if isInsideKeepArea(loc, of: screen) {
+            if !hasFocus && !buttonsDown { takeFocus() }
         } else if isPinned {
-            if panel.isKeyWindow { returnFocus() }
+            if activatedForPanel { returnFocus() }
         } else {
             hide()
         }
     }
 
-    /// True while the user drags files/images (e.g. from Finder) — then we do open,
-    /// so images can be dropped. Window drags and the like don't touch the drag pasteboard.
-    private func isDraggingDroppableContent() -> Bool {
-        let pb = NSPasteboard(name: .drag)
-        guard pb.changeCount != dragChangeCountAtMouseDown else { return false }
-        let types = pb.types ?? []
-        return types.contains(.fileURL) || types.contains(.png) || types.contains(.tiff)
+    /// The panel plus a safety margin toward the screen's interior; along the edge the
+    /// whole length counts, so sliding the mouse up/down never closes it.
+    private func isInsideKeepArea(_ p: NSPoint, of screen: NSScreen) -> Bool {
+        if isAtEdge(p, of: screen) { return true }
+        let f = panel.frame
+        let margin = CGFloat(settings.hideMargin)
+        switch settings.edge {
+        case .right: return p.x >= f.minX - margin
+        case .left: return p.x <= f.maxX + margin
+        case .bottom: return p.y <= f.maxY + margin
+        }
+    }
+
+    private func startPressPolling() {
+        guard pressPollTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if NSEvent.pressedMouseButtons == 0 {
+                    self.pressPollTimer?.invalidate()
+                    self.pressPollTimer = nil
+                    self.pressBeganInside = false
+                }
+                self.evaluateMouse(event: nil)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pressPollTimer = timer
+    }
+
+    // MARK: Focus
+
+    /// Input methods (e.g. Korean) only work in the active app, so peek activates itself
+    /// while the panel has focus and hands activation back afterwards.
+    private var hasFocus: Bool { NSApp.isActive && panel.isKeyWindow }
+
+    private func takeFocus() {
+        if !NSApp.isActive {
+            let front = NSWorkspace.shared.frontmostApplication
+            previousApp = front == NSRunningApplication.current ? nil : front
+            activatedForPanel = true
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(editor.textView)
+    }
+
+    /// Give keyboard focus back to the previously active app (the panel may stay on screen).
+    /// If peek was already active for another reason (settings window), leave it alone.
+    private func returnFocus() {
+        guard activatedForPanel else { return }
+        activatedForPanel = false
+        guard NSApp.isActive else { return }
+        if let app = previousApp, !app.isTerminated {
+            // Cooperative activation: hand activation over explicitly.
+            NSApp.yieldActivation(to: app)
+            app.activate(from: NSRunningApplication.current, options: [])
+        } else {
+            NSApp.deactivate()
+        }
+        previousApp = nil
     }
 
     // MARK: Show / hide
@@ -224,13 +282,13 @@ final class PanelController: NSObject {
             applyFrame()
             panel.orderFrontRegardless()
         }
-        panel.makeKey()
-        panel.makeFirstResponder(editor.textView)
+        takeFocus()
         animate(to: 1)
     }
 
     func hide() {
         guard target != 0 else { return }
+        returnFocus()
         animate(to: 0)
     }
 
@@ -239,14 +297,9 @@ final class PanelController: NSObject {
         animTimer = nil
         target = 0
         progress = 0
+        returnFocus()
         panel.orderOut(nil)
         editor.saveNow()
-    }
-
-    /// Give keyboard focus back to the previously active app while staying on screen.
-    private func returnFocus() {
-        panel.orderOut(nil)
-        panel.orderFrontRegardless()
     }
 
     func togglePin() {

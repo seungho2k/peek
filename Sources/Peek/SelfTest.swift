@@ -15,6 +15,7 @@ enum SelfTest {
         tabs()
         undo()
         images()
+        koreanComposition()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -220,6 +221,24 @@ enum SelfTest {
         caret(mixed, 1)
         mixed.insertFragment(NoteFormat.parse("1\n\(a)\n2"))
         check("pasted mix keeps images on own line", mixed, "a1\n\(a)\n2b")
+    }
+
+    private static func koreanComposition() {
+        let tv = makeView("- ")
+        caret(tv, 2)
+        let nf = NSRange(location: NSNotFound, length: 0)
+        for s in ["ㅇ", "아", "안"] { tv.setMarkedText(s, selectedRange: NSRange(location: 1, length: 0), replacementRange: nf) }
+        tv.insertText("안", replacementRange: nf)
+        for s in ["ㄴ", "녀", "녕"] { tv.setMarkedText(s, selectedRange: NSRange(location: 1, length: 0), replacementRange: nf) }
+        tv.insertText("녕", replacementRange: nf)
+        check("korean composition", tv, "- 안녕")
+
+        let rule = makeView("---")
+        caret(rule, 1)
+        rule.setMarkedText("ㅎ", selectedRange: NSRange(location: 1, length: 0), replacementRange: nf)
+        rule.setMarkedText("하", selectedRange: NSRange(location: 1, length: 0), replacementRange: nf)
+        rule.insertText("하", replacementRange: nf)
+        check("korean on rule line goes below", rule, "---\n하")
     }
 
     private static func undo() {

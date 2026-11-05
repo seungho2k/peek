@@ -9,7 +9,7 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
     private var saveWorkItem: DispatchWorkItem?
     private var isDirty = false
 
-    override init() {
+    init(loadFromDisk: Bool = true) {
         let storage = NSTextStorage()
         let layoutManager = NSLayoutManager()
         storage.addLayoutManager(layoutManager)
@@ -34,7 +34,7 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
 
-        reload()
+        if loadFromDisk { reload() }
     }
 
     /// Replaces the text view content with what's on disk.

@@ -10,7 +10,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         removeUnreferencedImages()
         panelController = PanelController()
         panelController.onOpenSettings = { [weak self] in self?.showSettings() }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["PEEK_FOCUS_PROBE"] != nil { runFocusProbe() }
+        #endif
     }
+
+    #if DEBUG
+    private func runFocusProbe() {
+        func report(_ label: String) {
+            let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
+            print("\(label): visible=\(panelController.panel.isVisible) front=\(front) active=\(NSApp.isActive) key=\(panelController.panel.isKeyWindow)")
+        }
+        report("before")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.panelController.show()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                report("shown")
+                self.panelController.hide()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                    report("hidden")
+                    exit(0)
+                }
+            }
+        }
+    }
+    #endif
 
     /// peek has no Dock or menu bar icon: launching it again opens settings.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
