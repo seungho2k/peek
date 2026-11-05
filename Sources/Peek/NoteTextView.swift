@@ -5,6 +5,7 @@ import AppKit
 /// lines") never contain text — typing on them moves to a new line.
 final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDelegate {
     var onOpenSettings: (() -> Void)?
+    var onToggleFill: (() -> Void)?
 
     /// Character range edited since the last block normalization pass.
     private var pendingNormalizeRange: NSRange?
@@ -26,6 +27,8 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         drawsBackground = false
         textContainerInset = Theme.textInset
         textContainer?.lineFragmentPadding = 0
+        // Lay out only what's visible: keeps resizing smooth with long notes.
+        layoutManager?.allowsNonContiguousLayout = true
         insertionPointColor = Theme.text
         typingAttributes = NoteFormat.baseAttributes
 
@@ -486,6 +489,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         case .rule: insertRule()
         case .pin: break  // global hotkey, handled by PanelController
         case .settings: onOpenSettings?()
+        case .fill: onToggleFill?()
         }
     }
 

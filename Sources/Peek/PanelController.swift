@@ -44,7 +44,7 @@ final class PanelController: NSObject {
 
     private static let handleThickness: CGFloat = 5
     /// ⌥-drag resize moves the edge this many times faster than the mouse.
-    private static let optionResizeGain: CGFloat = 3
+    private static let optionResizeGain: CGFloat = 2
 
     override init() {
         editor = NoteEditor()
@@ -57,6 +57,7 @@ final class PanelController: NSObject {
         hotKey.onPress = { [weak self] in self?.hotKeyPressed() }
         hotKey.register(settings.shortcut(for: .pin))
         editor.textView.onOpenSettings = { [weak self] in self?.onOpenSettings?() }
+        editor.textView.onToggleFill = { [weak self] in self?.toggleFill() }
 
         #if DEBUG
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
@@ -83,6 +84,7 @@ final class PanelController: NSObject {
         content.addSubview(editor.scrollView)
 
         resizeHandle.onDrag = { [weak self] point in self?.resize(to: point) }
+        resizeHandle.onDragEnded = { [weak self] in self?.commitLiveDepth() }
         content.addSubview(resizeHandle)
 
         // Shown only when the panel fills the screen, since the mouse can't leave it then.
@@ -177,7 +179,7 @@ final class PanelController: NSObject {
     }
 
     private func depth(for screen: NSScreen) -> CGFloat {
-        clampDepth(settings.edge.isSide ? settings.sideWidth : settings.bottomHeight, on: screen)
+        clampDepth(liveDepth ?? (settings.edge.isSide ? settings.sideWidth : settings.bottomHeight), on: screen)
     }
 
     /// Largest depth: the panel fills the screen like Window ▸ Fill (menu bar excluded).
@@ -459,6 +461,41 @@ final class PanelController: NSObject {
 
     // MARK: Resize
 
+    /// Depth while a resize drag is in progress; persisted to settings when the drag ends,
+    /// so dragging doesn't write preferences on every mouse event.
+    private var liveDepth: CGFloat?
+    /// Depth before ⌘↩ filled the screen; ⌘↩ again restores it.
+    private var depthBeforeFill: CGFloat?
+
+    private func setDepth(_ value: CGFloat, persist: Bool) {
+        guard let screen = targetScreen else { return }
+        let d = clampDepth(value, on: screen)
+        if persist {
+            liveDepth = nil
+            if settings.edge.isSide { settings.sideWidth = d } else { settings.bottomHeight = d }
+        } else {
+            liveDepth = d
+        }
+        applyFrame()
+    }
+
+    private func commitLiveDepth() {
+        if let d = liveDepth { setDepth(d, persist: true) }
+    }
+
+    /// ⌘↩: fill the screen, or restore the size from before. Does nothing if the panel was
+    /// made full by hand (there is no size to go back to).
+    func toggleFill() {
+        guard let screen = targetScreen else { return }
+        if let previous = depthBeforeFill {
+            depthBeforeFill = nil
+            setDepth(previous, persist: true)
+        } else if !isFull {
+            depthBeforeFill = depth(for: screen)
+            setDepth(maxDepth(on: screen), persist: true)
+        }
+    }
+
     /// ⌥ + drag anywhere in the panel resizes it (relative to where the drag started).
     private func handleOptionResize(_ event: NSEvent) -> Bool {
         switch event.type {
@@ -466,25 +503,26 @@ final class PanelController: NSObject {
             guard event.window === panel, event.modifierFlags.contains(.option) else { return false }
             guard let screen = targetScreen else { return false }
             optionResize = (NSEvent.mouseLocation, depth(for: screen))
+            depthBeforeFill = nil
             pressBeganInside = true
             startPressPolling()
             (settings.edge.isSide ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
             return true
         case .leftMouseDragged:
-            guard let start = optionResize, let screen = targetScreen else { return false }
+            guard let start = optionResize else { return false }
             let p = NSEvent.mouseLocation
             let k = Self.optionResizeGain
             switch settings.edge {
-            case .right: settings.sideWidth = clampDepth(start.depth + (start.point.x - p.x) * k, on: screen)
-            case .left: settings.sideWidth = clampDepth(start.depth + (p.x - start.point.x) * k, on: screen)
-            case .bottom: settings.bottomHeight = clampDepth(start.depth + (p.y - start.point.y) * k, on: screen)
+            case .right: setDepth(start.depth + (start.point.x - p.x) * k, persist: false)
+            case .left: setDepth(start.depth + (p.x - start.point.x) * k, persist: false)
+            case .bottom: setDepth(start.depth + (p.y - start.point.y) * k, persist: false)
             }
-            applyFrame()
             return true
         case .leftMouseUp:
             guard optionResize != nil else { return false }
             optionResize = nil
             NSCursor.pop()
+            commitLiveDepth()
             return true
         default:
             return false
@@ -494,17 +532,19 @@ final class PanelController: NSObject {
     private func resize(to point: NSPoint) {
         guard let screen = targetScreen else { return }
         let f = screen.frame
+        depthBeforeFill = nil
         switch settings.edge {
-        case .right: settings.sideWidth = clampDepth(f.maxX - point.x, on: screen)
-        case .left: settings.sideWidth = clampDepth(point.x - f.minX, on: screen)
-        case .bottom: settings.bottomHeight = clampDepth(point.y - f.minY, on: screen)
+        case .right: setDepth(f.maxX - point.x, persist: false)
+        case .left: setDepth(point.x - f.minX, persist: false)
+        case .bottom: setDepth(point.y - f.minY, persist: false)
         }
-        applyFrame()
     }
 
     // MARK: Changes
 
     private func edgeChanged() {
+        liveDepth = nil
+        depthBeforeFill = nil
         hideImmediately()
         isPinned = false
         applyFrame()
