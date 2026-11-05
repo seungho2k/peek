@@ -214,8 +214,8 @@ enum NoteFormat {
 
     // MARK: Styling
 
-    /// Show line 00 of every section (the first text line of the note and after each rule)
-    /// in bold. Display only: it isn't saved as `**…**`.
+    /// When you start typing on an empty line 00 (the first text line of the note or after a
+    /// rule), it becomes bold as if ⌘B had been pressed — saved as `**…**`, and ⌘B undoes it.
     static var autoBoldFirstLine = false
 
     /// Whether `line` is numbered 00: no text line between it and the start / the last rule.
@@ -245,16 +245,11 @@ enum NoteFormat {
         let ns = storage.string as NSString
         guard ns.length > 0 else { return }
         let start = min(range.location, ns.length)
-        var full = ns.paragraphRange(for: NSRange(location: start, length: min(range.length, ns.length - start)))
-        // Also the following line: whether it is a section's first line (auto bold) can change.
-        if autoBoldFirstLine && NSMaxRange(full) < ns.length {
-            full = NSUnionRange(full, ns.paragraphRange(for: NSRange(location: NSMaxRange(full), length: 0)))
-        }
+        let full = ns.paragraphRange(for: NSRange(location: start, length: min(range.length, ns.length - start)))
         for line in lineRanges(in: ns, covering: full) {
             let withBreak = NSRange(location: line.location, length: min(line.length + 1, ns.length - line.location))
             let isText = kind(of: storage, line: line) == .text
-            let explicitBold = isText && isBold(storage, line: line)  // saved as **…**
-            let bold = explicitBold || (isText && autoBoldFirstLine && isFirstLineOfSection(storage, line))
+            let bold = isText && isBold(storage, line: line)  // saved as **…**
 
             ensureColor(storage, withBreak)
             ensureParagraph(storage, withBreak, kind(of: storage, line: line) == .text ? Theme.textParagraph : Theme.blockParagraph)
@@ -264,7 +259,7 @@ enum NoteFormat {
             } else {
                 ensureFont(storage, withBreak, bold: false)
             }
-            ensureBoldMark(storage, line, on: explicitBold)
+            ensureBoldMark(storage, line, on: bold)
             if kind(of: storage, line: line) == .text { ensureLink(storage, line) }
             if withBreak.length > line.length {
                 ensureBoldMark(storage, NSRange(location: NSMaxRange(line), length: 1), on: false)

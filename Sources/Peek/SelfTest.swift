@@ -436,18 +436,33 @@ enum SelfTest {
     private static func autoBold() {
         let saved = NoteFormat.autoBoldFirstLine
         NoteFormat.autoBoldFirstLine = true
-        let tv = makeView("title\nbody\n---\nnext\nmore")
-        let boldAt = { (i: Int) in
-            (tv.textStorage!.attribute(.font, at: i, effectiveRange: nil) as! NSFont).fontDescriptor.symbolicTraits.contains(.bold)
-        }
-        expect("line 00 bold", boldAt(0))
-        expect("line 01 regular", !boldAt(7))
-        expect("line 00 after a rule bold", boldAt(14))
-        expect("next line regular", !boldAt(19))
-        check("auto bold isn't saved", tv, "title\nbody\n---\nnext\nmore")
-        caret(tv, 0)
-        type(tv, "x\n")
-        expect("new first line bold, old first line now regular", boldAt(0) && !boldAt(2))
+        let tv = makeView("")
+        type(tv, "title")
+        check("typing on empty line 00 makes it bold", tv, "**title**")
+        tv.insertNewline(nil)
+        type(tv, "body")
+        check("line 01 stays plain", tv, "**title**\nbody")
+        tv.perform(.rule)
+        type(tv, "next")
+        check("line 00 after a rule is bold", tv, "**title**\nbody\n---\n**next**")
+        tv.perform(.bold)
+        type(tv, "!")
+        check("⌘B on it makes it plain and it stays plain", tv, "**title**\nbody\n---\nnext!")
+
+        let loaded = makeView("title\nbody")
+        check("existing notes aren't changed", loaded, "title\nbody")
+
+        let ime = makeView("")
+        let nf = NSRange(location: NSNotFound, length: 0)
+        ime.setMarkedText("ㅎ", selectedRange: NSRange(location: 1, length: 0), replacementRange: nf)
+        ime.setMarkedText("한", selectedRange: NSRange(location: 1, length: 0), replacementRange: nf)
+        ime.insertText("한", replacementRange: nf)
+        check("korean on empty line 00 is bold too", ime, "**한**")
+
+        NoteFormat.autoBoldFirstLine = false
+        let off = makeView("")
+        type(off, "title")
+        check("option off: plain", off, "title")
         NoteFormat.autoBoldFirstLine = saved
     }
 

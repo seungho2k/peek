@@ -375,15 +375,34 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         resetTypingAttributes()
     }
 
+    /// Starting to type on an empty line 00 makes it bold (see NoteFormat.autoBoldFirstLine).
+    private func boldIfStartingFirstLine() {
+        guard NoteFormat.autoBoldFirstLine, !hasMarkedText(), let storage = textStorage else { return }
+        let sel = selectedRange()
+        guard sel.length == 0 else { return }
+        let current = line(at: sel.location)
+        guard current.length == 0, NoteFormat.isFirstLineOfSection(storage, current) else { return }
+        var attrs = NoteFormat.baseAttributes
+        attrs[.peekBold] = true
+        attrs[.font] = Theme.boldFont
+        typingAttributes = attrs
+    }
+
     override func insertText(_ string: Any, replacementRange: NSRange) {
         DebugLog.log("insertText \(String(describing: (string as? NSAttributedString)?.string ?? string)) rr=\(replacementRange) marked=\(hasMarkedText())")
-        if replacementRange.location == NSNotFound { moveOffBlockLineForTyping() }
+        if replacementRange.location == NSNotFound {
+            moveOffBlockLineForTyping()
+            boldIfStartingFirstLine()
+        }
         super.insertText(string, replacementRange: replacementRange)
     }
 
     override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
         DebugLog.log("setMarkedText \(String(describing: (string as? NSAttributedString)?.string ?? string)) rr=\(replacementRange) marked=\(hasMarkedText())")
-        if !hasMarkedText() && replacementRange.location == NSNotFound { moveOffBlockLineForTyping() }
+        if !hasMarkedText() && replacementRange.location == NSNotFound {
+            moveOffBlockLineForTyping()
+            boldIfStartingFirstLine()
+        }
         super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
     }
 

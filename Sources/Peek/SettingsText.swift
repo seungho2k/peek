@@ -32,7 +32,9 @@ enum SettingsText {
         for (key, action) in shortcutKeys {
             sections.append((key, ShortcutText.format(s.shortcut(for: action))))
         }
-        return ([title] + sections.map { "\($0.0)\n\($0.1)" }).joined(separator: "\n---\n")
+        // Line 00 of each section is bold when bold-first-line is on, as if typed in the note.
+        let b = { (t: String) in s.autoBoldFirstLine ? "**\(t)**" : t }
+        return ([b(title)] + sections.map { "\(b($0.0))\n\($0.1)" }).joined(separator: "\n---\n")
     }
 
     enum Change: Equatable {
