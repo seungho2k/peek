@@ -247,6 +247,17 @@ enum SelfTest {
         for s in ["ㄴ", "녀", "녕"] { tv.setMarkedText(s, selectedRange: NSRange(location: 1, length: 0), replacementRange: nf) }
         tv.insertText("녕", replacementRange: nf)
         check("korean composition", tv, "- 안녕")
+        let hangulFont = tv.textStorage!.attribute(.font, at: 2, effectiveRange: nil) as! NSFont
+        expect("hangul gets a font that has its glyphs (\(hangulFont.fontName))",
+               hangulFont.coveredCharacterSet.contains(UnicodeScalar("안")))
+        tv.perform(.bold)
+        let boldHangul = tv.textStorage!.attribute(.font, at: 2, effectiveRange: nil) as! NSFont
+        expect("bold hangul has glyphs (\(boldHangul.fontName))",
+               boldHangul.coveredCharacterSet.contains(UnicodeScalar("안")))
+        let loaded = makeView("한글\n**굵은 한글**")
+        let loadedFont = loaded.textStorage!.attribute(.font, at: 0, effectiveRange: nil) as! NSFont
+        expect("loaded hangul has glyphs (\(loadedFont.fontName))",
+               loadedFont.coveredCharacterSet.contains(UnicodeScalar("한")))
 
         let rule = makeView("---")
         caret(rule, 1)

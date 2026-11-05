@@ -204,5 +204,7 @@ enum NoteFormat {
                 if content.length > 0 { storage.addAttribute(.font, value: Theme.boldFont, range: content) }
             }
         }
+        // Substitute fonts for characters the system font lacks (e.g. Hangul).
+        storage.fixFontAttribute(in: full)
     }
 }

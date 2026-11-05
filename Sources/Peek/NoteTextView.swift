@@ -67,8 +67,11 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
 
     // MARK: Styling hook
 
+    // Runs before NSTextStorage fixes attributes, so font fallback (e.g. Apple SD Gothic Neo
+    // for Hangul, which SF lacks) is applied on top of our fonts rather than overwritten.
+
     nonisolated func textStorage(
-        _ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
+        _ textStorage: NSTextStorage, willProcessEditing editedMask: NSTextStorageEditActions,
         range editedRange: NSRange, changeInLength delta: Int
     ) {
         MainActor.assumeIsolated {
