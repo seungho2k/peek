@@ -90,6 +90,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// Image and rule lines are not counted; numbering restarts at 00 after every rule.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
+        guard Theme.showLineNumbers else { return }
         guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
         let ns = storage.string as NSString
         let origin = textContainerOrigin

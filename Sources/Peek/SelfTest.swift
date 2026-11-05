@@ -14,6 +14,7 @@ enum SelfTest {
         window.backgroundColor = Theme.background
         editor.scrollView.frame = window.contentView!.bounds
         window.contentView!.addSubview(editor.scrollView)
+        if ProcessInfo.processInfo.environment["PEEK_LINE_NUMBERS"] == "off" { Theme.showLineNumbers = false }
         let sample = ProcessInfo.processInfo.environment["PEEK_RENDER_TEXT"]?.replacingOccurrences(of: "\\n", with: "\n")
         editor.textView.load(markdown: sample ?? "한글 제목 line\n**굵은 줄**\n- 리스트\n  - 들여쓰기\n---\n마지막\n")
         editor.scrollView.tile()
@@ -413,7 +414,7 @@ enum SelfTest {
     private static func settingsText() {
         let formatted = SettingsText.format(Settings.shared)
         let (changes, invalid) = SettingsText.parse(formatted)
-        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 11)
+        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 12)
 
         for (text, code, mods) in [("cmd+-", KeyCode.minus, NSEvent.ModifierFlags.command),
                                    ("opt+space", KeyCode.space, .option),
@@ -425,12 +426,13 @@ enum SelfTest {
             if let sc { expect("format \(text)", ShortcutText.format(sc) == text) }
         }
 
-        let sample = "**preferences**\n\nedge:\nmiddle\n\nmin-width:\n50\n---\n**animations**\n\nfoo:\nbar\n\nbold\nb\n\nfade-in:\n90\n---\nshortcuts\n\nrule:\ncmd+k\n\nfill:\ncmd+k\n\nfade-out:"
+        let sample = "**preferences**\n\nedge:\nmiddle\n\nmin-width:\nabc\n---\n**animations**\n\nfoo:\nbar\n\nbold\nb\n\nfade-in:\n90\n---\nshortcuts\n\nrule:\ncmd+k\n\nfill:\ncmd+k\n\nfade-out:"
         let bad = SettingsText.parse(sample)
         // lines: 0 title | 2 edge 3 middle | 5 min-width 6 50 || 8 title | 10 foo 11 bar | 13 bold 14 b |
         // 16 fade-in 17 90 || 19 title | 21 rule 22 cmd+k | 24 fill 25 cmd+k | 27 fade-out (no value)
         expect("bad lines flagged (\(bad.invalid.sorted()))", bad.invalid == [3, 10, 14, 22, 25, 27])
-        expect("good lines applied; min-width below 80 becomes 80", bad.changes == [.minWidth(80), .fadeIn(90)])
+        expect("good lines applied; invalid min-width becomes 100", bad.changes == [.minWidth(100), .fadeIn(90)])
+        expect("min-width below 100 becomes 100", SettingsText.parse("t\n---\nt\n\nmin-width:\n60").changes == [.minWidth(100)])
     }
 
     private static func autoBold() {

@@ -184,6 +184,9 @@ on
 
 bold-first-line:
 on
+
+line-numbers:
+on
 ---
 **animations**
 
@@ -201,8 +204,8 @@ opt+space
 ```
 
 - 블럭 제목은 해석하지 않는다(이름을 바꿔도 무방). 항목은 어느 블럭에 있어도 되고, `이름` 뒤의 `:`는 있어도 없어도 된다.
-- 값: `edge` right/left, `min-width` 숫자(80 미만은 80), `fade-in`/`fade-out` 0–5000(ms), `launch-at-login`/`bold-first-line` on/off, 단축키는 cmd/opt/ctrl/shift + 키(예: opt+space, cmd+enter; cmd/opt/ctrl 중 하나 필수).
-- 패널 폭은 항상 `min-width`. `min-width`에 80보다 작은 값을 넣으면 80으로 적용. 노트 옆에 그만큼 공간이 없으면 노트를 모자란 폭만큼만 줄이고(예: 노트 1920pt, min-width 100 → 노트 1820pt) 그 자리에 띄운다. 설정을 닫으면 노트 폭이 돌아온다.
+- 값: `edge` right/left, `min-width` 숫자(100 미만이거나 숫자가 아니면 100), `line-numbers` on/off(끄면 번호 칸이 없어지고 글자는 왼쪽 8pt 여백에서 시작), `fade-in`/`fade-out` 0–5000(ms), `launch-at-login`/`bold-first-line` on/off, 단축키는 cmd/opt/ctrl/shift + 키(예: opt+space, cmd+enter; cmd/opt/ctrl 중 하나 필수).
+- 패널 폭은 항상 `min-width`. `min-width`는 최소 100. 노트 옆에 그만큼 공간이 없으면 노트를 모자란 폭만큼만 줄이고(예: 노트 1920pt, min-width 100 → 노트 1820pt) 그 자리에 띄운다. 설정을 닫으면 노트 폭이 돌아온다.
 - 입력하는 즉시 반영. 적용할 수 없는 줄(모르는 이름, 잘못되거나 빠진 값, 다른 항목과 겹치는 단축키)은 빨간색.
 - ⌘, 또는 Esc로 닫는다. ⌥Space로 노트를 숨기면 설정도 노트와 함께 페이드아웃되고, 열려 있었다면 노트를 다시 켤 때 함께 페이드인된다(포커스는 가져가지 않음). 종료는 노트에서 ⌘Q.
 - 값은 UserDefaults에 저장.

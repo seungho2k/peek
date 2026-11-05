@@ -44,7 +44,7 @@ final class Settings: ObservableObject {
 
     static let defaultSideWidth: CGFloat = 360
     /// min-width can't go below this.
-    static let minimumWidthFloor: Double = 80
+    static let minimumWidthFloor: Double = 100
 
     @Published var edge: PeekEdge {
         didSet { defaults.set(edge.rawValue, forKey: "edge") }
@@ -60,6 +60,10 @@ final class Settings: ObservableObject {
     /// Panel width when peeking from the left or right edge.
     @Published var sideWidth: CGFloat {
         didSet { defaults.set(Double(sideWidth), forKey: "sideWidth") }
+    }
+    /// Show line numbers in the left gutter (note and settings).
+    @Published var showLineNumbers: Bool {
+        didSet { defaults.set(showLineNumbers, forKey: "showLineNumbers") }
     }
     /// Line 00 of every section is shown in bold.
     @Published var autoBoldFirstLine: Bool {
@@ -89,6 +93,7 @@ final class Settings: ObservableObject {
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
         defaults.removeObject(forKey: "bottomHeight")  // bottom edge removed
         autoBoldFirstLine = defaults.object(forKey: "autoBoldFirstLine") as? Bool ?? true
+        showLineNumbers = defaults.object(forKey: "showLineNumbers") as? Bool ?? true
 
         var sc: [ShortcutAction: Shortcut] = [:]
         if let data = defaults.data(forKey: "shortcuts"),

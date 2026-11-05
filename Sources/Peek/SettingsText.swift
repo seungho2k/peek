@@ -26,6 +26,7 @@ enum SettingsText {
                 ("min-width", "\(Int(s.minDepth))"),
                 ("launch-at-login", s.launchAtLogin ? "on" : "off"),
                 ("bold-first-line", s.autoBoldFirstLine ? "on" : "off"),
+                ("line-numbers", s.showLineNumbers ? "on" : "off"),
             ]),
             ("animations", [
                 ("fade-in", "\(Int(s.slideInMs))"),
@@ -45,6 +46,7 @@ enum SettingsText {
         case fadeOut(Double)
         case launchAtLogin(Bool)
         case autoBoldFirstLine(Bool)
+        case lineNumbers(Bool)
         case shortcut(ShortcutAction, Shortcut)
     }
 
@@ -111,8 +113,9 @@ enum SettingsText {
         case "edge":
             return PeekEdge(rawValue: value).map { .ok(.edge($0)) } ?? .badValue
         case "min-width":
-            guard let n = Double(value), n >= 0, n <= 3000 else { return .badValue }
-            return .ok(.minWidth(max(n, Settings.minimumWidthFloor)))  // below 80 becomes 80
+            // Anything below 100 — or not a number — means 100.
+            let n = min(Double(value) ?? Settings.minimumWidthFloor, 3000)
+            return .ok(.minWidth(max(n, Settings.minimumWidthFloor)))
         case "fade-in", "fade-out":
             guard let n = Double(value), (0...5000).contains(n) else { return .badValue }
             return .ok(key == "fade-in" ? .fadeIn(n) : .fadeOut(n))
@@ -120,6 +123,8 @@ enum SettingsText {
             return onOff(value).map { .ok(.launchAtLogin($0)) } ?? .badValue
         case "bold-first-line":
             return onOff(value).map { .ok(.autoBoldFirstLine($0)) } ?? .badValue
+        case "line-numbers":
+            return onOff(value).map { .ok(.lineNumbers($0)) } ?? .badValue
         default:
             guard let action = shortcutKeys.first(where: { $0.key == key })?.action else { return .unknownKey }
             guard let sc = ShortcutText.parse(value),
@@ -138,6 +143,7 @@ enum SettingsText {
             case .fadeOut(let n): if s.slideOutMs != n { s.slideOutMs = n }
             case .launchAtLogin(let on): if s.launchAtLogin != on { s.launchAtLogin = on }
             case .autoBoldFirstLine(let on): if s.autoBoldFirstLine != on { s.autoBoldFirstLine = on }
+            case .lineNumbers(let on): if s.showLineNumbers != on { s.showLineNumbers = on }
             case .shortcut(let action, let sc): if s.shortcut(for: action) != sc { s.shortcuts[action] = sc }
             }
         }

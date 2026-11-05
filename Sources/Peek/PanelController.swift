@@ -39,6 +39,7 @@ final class PanelController: NSObject {
 
     override init() {
         NoteFormat.autoBoldFirstLine = Settings.shared.autoBoldFirstLine
+        Theme.showLineNumbers = Settings.shared.showLineNumbers
         editor = NoteEditor()
         super.init()
         setUpContent()
@@ -105,6 +106,13 @@ final class PanelController: NSObject {
     private func observeSettings() {
         settings.$shortcuts.dropFirst().sink { [weak self] shortcuts in
             DispatchQueue.main.async { self?.hotKey.register(shortcuts[.pin] ?? ShortcutAction.pin.defaultShortcut) }
+        }.store(in: &cancellables)
+        settings.$showLineNumbers.dropFirst().sink { [weak self] on in
+            DispatchQueue.main.async {
+                Theme.showLineNumbers = on
+                self?.editor.textView.restyleAll()
+                self?.settingsPanel.textView.restyleAll()
+            }
         }.store(in: &cancellables)
         settings.$autoBoldFirstLine.dropFirst().sink { on in
             DispatchQueue.main.async { NoteFormat.autoBoldFirstLine = on }
