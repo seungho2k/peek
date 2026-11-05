@@ -173,6 +173,11 @@ enum SelfTest {
         type(atStart, "hi")
         check("typing at image line start goes above", atStart, "hi\n\(a)")
 
+        let between = makeView(a + b)
+        caret(between, 1)
+        type(between, "hi")
+        check("typing between images splits the row", between, "\(a)\nhi\n\(b)")
+
         let back = makeView("\(a)\ntext")
         caret(back, 2)
         back.deleteBackward(nil)

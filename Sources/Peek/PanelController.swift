@@ -35,7 +35,7 @@ final class PanelController: NSObject {
 
     var onOpenSettings: (() -> Void)?
 
-    private static let handleThickness: CGFloat = 5
+    private static let handleThickness: CGFloat = 10
 
     override init() {
         editor = NoteEditor()

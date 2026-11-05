@@ -203,7 +203,8 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
     }
 
     /// When the caret sits on a rule/image line, open a new text line for typing:
-    /// above it if the caret is at the start of the line, below it otherwise.
+    /// above it at the start of the line, below it at the end, and between the two
+    /// halves of an image row when the caret is between images.
     private func moveOffBlockLineForTyping() {
         guard !hasMarkedText() else { return }
         let sel = selectedRange()
@@ -213,6 +214,10 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
         if sel.location == current.location {
             applyEdits([(NSRange(location: sel.location, length: 0), plain("\n"))],
                        selectAfter: NSRange(location: sel.location, length: 0))
+        } else if sel.location < NSMaxRange(current) {
+            // Between two images: split the row and type on a new line in between.
+            applyEdits([(NSRange(location: sel.location, length: 0), plain("\n\n"))],
+                       selectAfter: NSRange(location: sel.location + 1, length: 0))
         } else {
             let end = NSMaxRange(current)
             applyEdits([(NSRange(location: end, length: 0), plain("\n"))],

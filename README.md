@@ -11,7 +11,13 @@ scripts/run.sh            # debug 빌드 후 build/peek.app 재실행
 scripts/build.sh release  # build/peek.app 생성 (ad-hoc 서명)
 ```
 
-자주 쓸 거라면 `build/peek.app`을 `/Applications`로 옮긴 뒤 설정에서 "로그인 시 자동 실행"을 켠다.
+설치해서 쓰려면:
+
+```sh
+scripts/install.sh        # release 빌드 → /Applications/peek.app 설치 후 실행
+```
+
+그다음 화면 끝으로 마우스 → ⌘, 로 설정을 열어 "로그인 시 자동 실행"을 켜면 재부팅 후에도 자동으로 뜬다.
 
 ## 사용
 
