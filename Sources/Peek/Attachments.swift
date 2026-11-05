@@ -25,8 +25,8 @@ final class RuleCell: NSTextAttachmentCell {
     ) -> NSRect {
         let font = Theme.font
         let height = ceil(font.ascender - font.descender + font.leading)
-        // From after the line-number gutter to the right text margin, like text lines.
-        let width = containerLineWidth(textContainer) - Theme.gutterWidth - Theme.textRightMargin
+        // Edge to edge like image rows (no gutter, no right margin).
+        let width = containerLineWidth(textContainer) - 2 * Theme.blockSideInset
         return NSRect(x: 0, y: floor(font.descender), width: max(1, width), height: height)
     }
 
@@ -129,7 +129,7 @@ final class ImageCell: NSTextAttachmentCell {
         }
         guard !items.isEmpty else { return [] }
         let gaps = Theme.imageGap * CGFloat(items.count - 1)
-        let rowWidth = containerLineWidth(container) - 2 * Theme.imageSideInset - gaps
+        let rowWidth = containerLineWidth(container) - 2 * Theme.blockSideInset - gaps
         let height = max(1, floor(rowWidth / max(items.reduce(0) { $0 + $1.aspect }, 0.01)))
         var used: CGFloat = 0
         return items.enumerated().map { i, item in

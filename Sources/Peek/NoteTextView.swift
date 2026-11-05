@@ -67,8 +67,8 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
 
     // MARK: Line numbers
 
-    /// Faint two-digit numbers (00, 01, …) in the left gutter of every text/rule line.
-    /// Image lines are not counted and use the gutter for the image itself.
+    /// Faint two-digit numbers (00, 01, …) in the left gutter of every text line.
+    /// Image and rule lines are not counted and use the gutter themselves.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
         guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
@@ -97,7 +97,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         var index = 0
         while index < ns.length {
             let paragraph = ns.paragraphRange(for: NSRange(location: index, length: 0))
-            if !(storage.attribute(.attachment, at: index, effectiveRange: nil) is ImageAttachment) {
+            if storage.attribute(.attachment, at: index, effectiveRange: nil) == nil {
                 let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
                 if frag.minY + origin.y > rect.maxY { return }
                 draw(number, lineTop: frag.minY)
