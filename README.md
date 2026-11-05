@@ -33,3 +33,7 @@ swift build && .build/debug/Peek --selftest   # 헤드리스 에디터 테스트
 ```
 
 `Theme.swift`의 색상(애플 메모)과 여백은 추정값이다. Digital Color Meter로 재서 조정하면 된다.
+
+## 폰트
+
+[Pretendard](https://github.com/orioncactus/pretendard) v1.3.9 (Regular, Bold)를 `Support/Fonts`에 포함한다. SIL Open Font License 1.1 — `Support/Fonts/LICENSE.txt`.

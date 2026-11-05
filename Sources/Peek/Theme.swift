@@ -37,9 +37,17 @@ enum Theme {
 
     /// Stickies' default note text is 12pt.
     static let fontSize: CGFloat = 12
-    /// Apple SD Gothic Neo for all text (Latin and Hangul alike), falling back to the system font.
-    static var font: NSFont { NSFont(name: "AppleSDGothicNeo-Regular", size: fontSize) ?? .systemFont(ofSize: fontSize) }
-    static var boldFont: NSFont { NSFont(name: "AppleSDGothicNeo-Bold", size: fontSize) ?? .boldSystemFont(ofSize: fontSize) }
+    /// Pretendard (bundled) for all text; Apple SD Gothic Neo, then the system font, as fallbacks.
+    static var font: NSFont {
+        NSFont(name: "Pretendard-Regular", size: fontSize)
+            ?? NSFont(name: "AppleSDGothicNeo-Regular", size: fontSize)
+            ?? .systemFont(ofSize: fontSize)
+    }
+    static var boldFont: NSFont {
+        NSFont(name: "Pretendard-Bold", size: fontSize)
+            ?? NSFont(name: "AppleSDGothicNeo-Bold", size: fontSize)
+            ?? .boldSystemFont(ofSize: fontSize)
+    }
 
     /// Text inset: `height` top/bottom; the text starts right after the line numbers and
     /// keeps `2 × width` free on the right (see NoteTextView.textContainerOrigin).
