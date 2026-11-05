@@ -196,7 +196,7 @@ final class PanelController: NSObject {
         if target == 0 {
             // Hidden or sliding out: only the screen edge brings it back (also mid-drag,
             // so files can be dragged in).
-            if isAtEdge(loc, of: screen) { show() }
+            if isAtEdge(loc, of: screen) && !Activation.isDockOverlayActive() { show() }
             return
         }
 
@@ -244,7 +244,7 @@ final class PanelController: NSObject {
     // MARK: Focus
 
     /// Input methods (e.g. Korean) only work in the active app, so peek activates itself
-    /// while the panel has focus and hands activation back afterwards.
+    /// while the panel has focus and hands activation back afterwards (see `Activation`).
     private var hasFocus: Bool { NSApp.isActive && panel.isKeyWindow }
 
     private func takeFocus() {
@@ -252,7 +252,7 @@ final class PanelController: NSObject {
             let front = NSWorkspace.shared.frontmostApplication
             previousApp = front == NSRunningApplication.current ? nil : front
             activatedForPanel = true
-            NSApp.activate(ignoringOtherApps: true)
+            Activation.activateSelf()
         }
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(editor.textView)

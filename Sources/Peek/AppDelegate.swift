@@ -22,7 +22,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             print("\(label): visible=\(panelController.panel.isVisible) front=\(front) active=\(NSApp.isActive) key=\(panelController.panel.isKeyWindow)")
         }
         report("before")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        let delay = Double(ProcessInfo.processInfo.environment["PEEK_FOCUS_PROBE"] ?? "") ?? 0.5
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            report("before show")
             self.panelController.show()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                 report("shown")

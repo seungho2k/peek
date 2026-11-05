@@ -30,9 +30,9 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
     }
     var defaultShortcut: Shortcut {
         switch self {
-        case .plain: Shortcut(keyCode: KeyCode.one, modifiers: .command)
-        case .bold: Shortcut(keyCode: KeyCode.two, modifiers: .command)
-        case .list: Shortcut(keyCode: KeyCode.three, modifiers: .command)
+        case .plain: Shortcut(keyCode: KeyCode.zero, modifiers: .command)
+        case .bold: Shortcut(keyCode: KeyCode.b, modifiers: .command)
+        case .list: Shortcut(keyCode: KeyCode.l, modifiers: .command)
         case .rule: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
         case .pin: Shortcut(keyCode: KeyCode.p, modifiers: .command)
         case .settings: Shortcut(keyCode: KeyCode.comma, modifiers: .command)
@@ -96,6 +96,12 @@ final class Settings: ObservableObject {
         if let data = defaults.data(forKey: "shortcuts"),
            let stored = try? JSONDecoder().decode([String: Shortcut].self, from: data) {
             for (k, v) in stored { if let a = ShortcutAction(rawValue: k) { sc[a] = v } }
+        }
+        // v1 defaults were ⌘1/⌘2/⌘3; move untouched ones to the current defaults.
+        if defaults.integer(forKey: "shortcutsVersion") < 2 {
+            let v1: [ShortcutAction: UInt16] = [.plain: KeyCode.one, .bold: KeyCode.two, .list: KeyCode.three]
+            for (a, key) in v1 where sc[a] == Shortcut(keyCode: key, modifiers: .command) { sc[a] = nil }
+            defaults.set(2, forKey: "shortcutsVersion")
         }
         for a in ShortcutAction.allCases where sc[a] == nil { sc[a] = a.defaultShortcut }
         shortcuts = sc

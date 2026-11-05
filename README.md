@@ -17,7 +17,7 @@ scripts/build.sh release  # build/peek.app 생성 (ad-hoc 서명)
 
 - 화면 오른쪽 끝(설정에서 왼쪽/아래로 변경)에 마우스를 대면 노트가 나오고, 벗어나면 들어간다.
 - 설정: 노트에서 ⌘, 또는 peek를 한 번 더 실행.
-- 단축키(기본): ⌘1 플레인, ⌘2 굵게, ⌘3 리스트, ⌘↩ 수평선, ⌘P pin, Ctrl+H/J/K/L 방향키.
+- 단축키(기본): ⌘0 플레인, ⌘B 굵게, ⌘L 리스트, ⌘↩ 수평선, ⌘P pin, Ctrl+H/J/K/L 방향키.
 - 데이터: `~/Library/Application Support/peek/note.md`, `images/`.
 
 ## 개발
