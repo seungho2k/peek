@@ -162,14 +162,27 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         MainActor.assumeIsolated {
             guard let storage = layoutManager.textStorage else { return false }
             let chars = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
-            var hasAttachment = false
+            var attachment: NSTextAttachment?
             if chars.length > 0 {
                 storage.enumerateAttribute(.attachment, in: chars) { value, _, stop in
-                    if value != nil { hasAttachment = true; stop.pointee = true }
+                    if let a = value as? NSTextAttachment { attachment = a; stop.pointee = true }
                 }
             }
-            if hasAttachment { return false }
             let m = Theme.lineMetrics
+            if attachment is ImageAttachment {
+                // Treat the image like one big glyph spanning cap height → baseline, so the space
+                // above and below it matches the space between two text lines.
+                guard let height = ImageCell.rowWidths(in: storage, at: chars.location, container: textContainer).first?.height
+                else { return false }
+                let capHeight = Theme.font.capHeight
+                let top = m.baseline - capHeight
+                let lineHeight = ceil(height + m.height - capHeight)
+                lineFragmentRect.pointee.size.height = lineHeight
+                lineFragmentUsedRect.pointee.size.height = lineHeight
+                baselineOffset.pointee = top + height
+                return true
+            }
+            if attachment != nil { return false }
             lineFragmentRect.pointee.size.height = m.height
             lineFragmentUsedRect.pointee.size.height = m.height
             baselineOffset.pointee = m.baseline

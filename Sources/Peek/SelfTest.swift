@@ -250,6 +250,27 @@ enum SelfTest {
         expect("row starts at the left inset", abs(r0.minX - inset) < 0.01)
         expect("row ends exactly at the right inset", abs(r1.maxX - (tc.size.width - inset)) < 0.01)
         expect("aspect kept", abs(r0.width / r1.width - 2) < 0.1)
+        // Space around an image line equals the space between text lines.
+        let spaced = makeView("a\n![](images/\(names[0]))\nb\nc")
+        let slm = spaced.layoutManager!, stc = spaced.textContainer!
+        slm.ensureLayout(for: stc)
+        let lineA = slm.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil)
+        // The image sits on its line's baseline (cell origin at the baseline).
+        let imageFrag = slm.lineFragmentRect(forGlyphAt: 2, effectiveRange: nil)
+        let imageHeight = ImageCell.rowWidths(in: spaced.textStorage!, at: 2, container: stc)[0].height
+        let imageBottomY = imageFrag.minY + slm.location(forGlyphAt: 2).y
+        let imageRect = NSRect(x: 0, y: imageBottomY - imageHeight, width: 1, height: imageHeight)
+        let baselineA = lineA.minY + slm.location(forGlyphAt: 0).y
+        let lineB = slm.lineFragmentRect(forGlyphAt: 4, effectiveRange: nil)
+        let lineC = slm.lineFragmentRect(forGlyphAt: 6, effectiveRange: nil)
+        let baselineB = lineB.minY + slm.location(forGlyphAt: 4).y
+        let capTop = { (lineTop: CGFloat, glyph: Int) in lineTop + slm.location(forGlyphAt: glyph).y - Theme.font.capHeight }
+        let textGap = capTop(lineC.minY, 6) - baselineB
+        let gapAbove = imageRect.minY - baselineA
+        let gapBelow = capTop(lineB.minY, 4) - imageRect.maxY
+        print("     gaps: text=\(textGap) aboveImage=\(gapAbove) belowImage=\(gapBelow)")
+        expect("gap above image matches text line gap", abs(gapAbove - textGap) < 1)
+        expect("gap below image matches text line gap", abs(gapBelow - textGap) < 1)
         let origin = layout.textContainerOrigin
         let hit1 = layout.imageAttachment(at: NSPoint(x: r1.midX + origin.x, y: r1.midY + origin.y))
         expect("double-click hit finds the second image", hit1?.name == names[1])
