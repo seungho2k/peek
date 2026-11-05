@@ -24,6 +24,9 @@ final class PanelController: NSObject {
     private var animTimer: Timer?
 
     private(set) var isPinned = false
+    /// False right after a forced close while the cursor may be on the edge; re-armed once
+    /// the cursor leaves the edge.
+    private var edgeTriggerArmed = true
     /// Start of an ⌥-drag resize: mouse location and panel depth at mouse-down.
     private var optionResize: (point: NSPoint, depth: CGFloat)?
     /// A mouse button went down inside the panel and is still held.
@@ -260,7 +263,12 @@ final class PanelController: NSObject {
         if target == 0 {
             // Hidden or sliding out: only the screen edge brings it back (also mid-drag,
             // so files can be dragged in).
-            if isAtEdge(loc, of: screen) && !SystemState.isDockOverlayActive() { show() }
+            let atEdge = isAtEdge(loc, of: screen)
+            if !edgeTriggerArmed {
+                if !atEdge { edgeTriggerArmed = true }
+                return
+            }
+            if atEdge && !SystemState.isDockOverlayActive() { show() }
             return
         }
 
@@ -399,13 +407,19 @@ final class PanelController: NSObject {
         hide()
     }
 
-    /// Global hotkey: open + pin without taking focus; when already pinned, unpin.
+    /// Global hotkey: open + pin without taking focus. When pinned: unpin and fade out even
+    /// if the mouse is over the panel. When open but not pinned: pin.
     func hotKeyPressed() {
         if target == 0 {
             isPinned = true
             show()
+        } else if isPinned {
+            isPinned = false
+            // The mouse may sit on the screen edge; don't reopen until it has left the edge.
+            edgeTriggerArmed = false
+            hide()
         } else {
-            togglePin()
+            isPinned = true
         }
     }
 
