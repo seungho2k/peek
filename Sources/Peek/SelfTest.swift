@@ -49,6 +49,7 @@ enum SelfTest {
         koreanMidLine()
         clickLines()
         links()
+        settingsText()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -406,6 +407,26 @@ enum SelfTest {
         type(text, "see https://a.com")
         text.insertNewline(nil)
         expect("URL inside text is not a link", link(text, 6) == nil)
+    }
+
+    private static func settingsText() {
+        let formatted = SettingsText.format(Settings.shared)
+        let (changes, invalid) = SettingsText.parse(formatted)
+        expect("formatted settings parse cleanly", invalid.isEmpty && changes.count == formatted.components(separatedBy: "\n").count)
+
+        for (text, code, mods) in [("cmd+-", KeyCode.minus, NSEvent.ModifierFlags.command),
+                                   ("opt+space", KeyCode.space, .option),
+                                   ("cmd+,", KeyCode.comma, .command),
+                                   ("cmd+enter", KeyCode.returnKey, .command),
+                                   ("ctrl+shift+k", KeyCode.k, [.control, .shift])] {
+            let sc = ShortcutText.parse(text)
+            expect("parse \(text)", sc == Shortcut(keyCode: code, modifiers: mods))
+            if let sc { expect("format \(text)", ShortcutText.format(sc) == text) }
+        }
+
+        let bad = SettingsText.parse("edge: middle\nmin-size: abc\nfoo: bar\nbold: b\nfade-in: 90\n\nrule: cmd+k\nfill: cmd+k")
+        expect("bad lines flagged (\(bad.invalid.sorted()))", bad.invalid == [0, 1, 2, 3, 6, 7])
+        expect("good line applied", bad.changes == [.fadeIn(90)])
     }
 
     private static func undo() {

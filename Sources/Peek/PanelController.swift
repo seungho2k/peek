@@ -26,7 +26,7 @@ final class PanelController: NSObject {
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
 
-    var onOpenSettings: (() -> Void)?
+    let settingsPanel = SettingsPanelController()
 
     private static let handleThickness: CGFloat = 5
     /// ⌥-drag resize moves the edge this many times faster than the mouse.
@@ -41,7 +41,7 @@ final class PanelController: NSObject {
 
         hotKey.onPress = { [weak self] in self?.hotKeyPressed() }
         hotKey.register(settings.shortcut(for: .pin))
-        editor.textView.onOpenSettings = { [weak self] in self?.onOpenSettings?() }
+        editor.textView.onOpenSettings = { [weak self] in self?.toggleSettings() }
         editor.textView.onToggleFill = { [weak self] in self?.toggleFill() }
 
         #if DEBUG
@@ -174,6 +174,7 @@ final class PanelController: NSObject {
         if newFrame != panel.frame {
             panel.setFrame(newFrame, display: true)
             layoutContent()
+            if settingsPanel.isVisible { settingsPanel.reposition(besideNote: newFrame, edge: settings.edge) }
         }
         panel.alphaValue = progress
     }
@@ -189,8 +190,19 @@ final class PanelController: NSObject {
         animate(to: 1)
     }
 
+    /// ⌘, (or launching peek again): text settings beside the note; opens the note if needed.
+    func showSettings() {
+        if target == 0 { show() }
+        settingsPanel.show(besideNote: panel.frame, edge: settings.edge)
+    }
+
+    func toggleSettings() {
+        if settingsPanel.isVisible { settingsPanel.hide() } else { showSettings() }
+    }
+
     func hide() {
         guard target != 0 else { return }
+        settingsPanel.hide()
         // Don't leave a half-composed syllable behind.
         editor.textView.commitComposition()
         animate(to: 0)

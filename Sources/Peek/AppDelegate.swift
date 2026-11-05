@@ -3,13 +3,11 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: PanelController!
-    private let settingsWindow = SettingsWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = MainMenu.build()
         removeUnreferencedImages()
         panelController = PanelController()
-        panelController.onOpenSettings = { [weak self] in self?.showSettings() }
         #if DEBUG
         if ProcessInfo.processInfo.environment["PEEK_FOCUS_PROBE"] != nil { runFocusProbe() }
         #endif
@@ -32,6 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                 report("shown")
+                if ProcessInfo.processInfo.environment["PEEK_SETTINGS_PROBE"] != nil {
+                    self.panelController.showSettings()
+                    let sp = self.panelController.settingsPanel.panel
+                    print("settings: note=\(self.panelController.panel.frame) settings=\(sp.frame) visible=\(sp.isVisible) key=\(sp.isKeyWindow)")
+                }
                 self.panelController.hide()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                     report("hidden")
@@ -60,6 +63,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func showSettings() {
-        settingsWindow.show()
+        panelController.showSettings()
     }
 }

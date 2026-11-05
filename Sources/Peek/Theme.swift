@@ -62,6 +62,9 @@ enum Theme {
     /// Space between images on the same line (none: they sit flush).
     static let imageGap: CGFloat = 0
 
+    /// Settings lines that couldn't be applied.
+    static let invalid = NSColor.systemRed
+
     /// Line numbers: barely visible.
     static let lineNumber = dynamic(
         light: NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.16),
