@@ -48,6 +48,7 @@ enum SelfTest {
         lineMetrics()
         koreanMidLine()
         clickLines()
+        links()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -335,6 +336,34 @@ enum SelfTest {
                 expect("click line \(line + 1) of \(doc.debugDescription) → line \(lineOfIdx + 1) (idx \(idx))", lineOfIdx == line)
             }
         }
+    }
+
+    private static func links() {
+        func link(_ tv: NoteTextView, _ at: Int) -> URL? {
+            tv.textStorage!.attribute(.link, at: at, effectiveRange: nil) as? URL
+        }
+        let tv = makeView()
+        type(tv, "https://example.com/a")
+        expect("URL not a link before Enter", link(tv, 3) == nil)
+        tv.insertNewline(nil)
+        expect("URL becomes a link after Enter", link(tv, 3)?.absoluteString == "https://example.com/a")
+        type(tv, "next")
+        expect("next line is not a link", link(tv, (tv.string as NSString).length - 1) == nil)
+        check("link line saves as plain URL", tv, "https://example.com/a\nnext")
+
+        let loaded = makeView("https://a.com\nhttps://b.com")
+        expect("loaded URL line with break is a link", link(loaded, 2) != nil)
+        expect("last URL line without break is not a link", link(loaded, 16) == nil)
+
+        let edited = makeView("https://a.com\nx")
+        caret(edited, 13)
+        type(edited, " words")
+        expect("editing a link line into text removes the link", link(edited, 2) == nil)
+
+        let text = makeView()
+        type(text, "see https://a.com")
+        text.insertNewline(nil)
+        expect("URL inside text is not a link", link(text, 6) == nil)
     }
 
     private static func undo() {

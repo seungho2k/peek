@@ -27,6 +27,11 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         drawsBackground = false
         textContainerInset = Theme.textInset
         textContainer?.lineFragmentPadding = 0
+        linkTextAttributes = [
+            .foregroundColor: Theme.lineNumber,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .cursor: NSCursor.pointingHand,
+        ]
         // Lay out only what's visible: keeps resizing smooth with long notes.
         layoutManager?.allowsNonContiguousLayout = true
         insertionPointColor = Theme.text
@@ -355,8 +360,14 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
                 return
             }
         }
+        let url = sel.length == 0 && sel.location == NSMaxRange(current) && kind(of: current) == .text
+            ? NoteFormat.linkURL(in: lineText) : nil
         super.insertNewline(sender)
         resetTypingAttributes()
+        if let url, current.length > 0 {
+            // Enter after a URL-only line turns it into a link.
+            changeAttributes(of: [current]) { $0.addAttribute(.link, value: url, range: current) }
+        }
     }
 
     override func deleteBackward(_ sender: Any?) {

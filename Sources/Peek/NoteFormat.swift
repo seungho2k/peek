@@ -36,9 +36,57 @@ enum NoteFormat {
         let lines = markdown.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
         for (i, line) in lines.enumerated() {
             if i > 0 { result.append(NSAttributedString(string: "\n", attributes: baseAttributes)) }
-            result.append(parseLine(line))
+            let parsed = NSMutableAttributedString(attributedString: parseLine(line))
+            // A URL-only line that was ended with Enter is a link.
+            if i < lines.count - 1, let url = linkURL(in: line) {
+                parsed.addAttribute(.link, value: url, range: NSRange(location: 0, length: parsed.length))
+            }
+            result.append(parsed)
         }
         return result
+    }
+
+    // MARK: Links
+
+    private static let linkDetector = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+
+    /// The URL if the whole line (ignoring surrounding spaces) is a single web address.
+    static func linkURL(in line: String) -> URL? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let ns = trimmed as NSString
+        guard ns.length > 0, !trimmed.contains(" "),
+              let match = linkDetector.firstMatch(in: trimmed, range: NSRange(location: 0, length: ns.length)),
+              match.range.location == 0, match.range.length == ns.length,
+              let url = match.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+        else { return nil }
+        return url
+    }
+
+    /// Keeps `.link` only on lines that still are a URL and end with a line break; a line only
+    /// becomes a link when Enter is pressed on it (see NoteTextView.insertNewline).
+    private static func ensureLink(_ storage: NSTextStorage, _ line: NSRange) {
+        let ns = storage.string as NSString
+        var hasLink = false
+        storage.enumerateAttribute(.link, in: line) { value, _, stop in
+            if value != nil { hasLink = true; stop.pointee = true }
+        }
+        if NSMaxRange(line) < ns.length, storage.attribute(.link, at: NSMaxRange(line), effectiveRange: nil) != nil {
+            storage.removeAttribute(.link, range: NSRange(location: NSMaxRange(line), length: 1))
+        }
+        guard hasLink else { return }
+        let followedByBreak = NSMaxRange(line) < ns.length
+        if followedByBreak, let url = linkURL(in: ns.substring(with: line)) {
+            var current: URL?
+            var uniform = true
+            storage.enumerateAttribute(.link, in: line) { value, _, _ in
+                let u = value as? URL
+                if current == nil { current = u } else if u != current { uniform = false }
+                if u == nil { uniform = false }
+            }
+            if !uniform || current != url { storage.addAttribute(.link, value: url, range: line) }
+        } else {
+            storage.removeAttribute(.link, range: line)
+        }
     }
 
     private static func parseLine(_ line: String) -> NSAttributedString {
@@ -192,6 +240,7 @@ enum NoteFormat {
                 ensureFont(storage, withBreak, bold: false)
             }
             ensureBoldMark(storage, line, on: bold)
+            if kind(of: storage, line: line) == .text { ensureLink(storage, line) }
             if withBreak.length > line.length {
                 ensureBoldMark(storage, NSRange(location: NSMaxRange(line), length: 1), on: false)
             }
