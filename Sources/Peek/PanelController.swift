@@ -271,16 +271,15 @@ final class PanelController: NSObject {
         }
     }
 
-    /// The panel plus a safety margin toward the screen's interior; along the edge the
-    /// whole length counts, so sliding the mouse up/down never closes it.
+    /// The panel's band: along the edge the whole screen length counts, so sliding the mouse
+    /// up/down never closes it.
     private func isInsideKeepArea(_ p: NSPoint, of screen: NSScreen) -> Bool {
         if isAtEdge(p, of: screen) { return true }
         let f = panel.frame
-        let margin = CGFloat(settings.hideMargin)
         switch settings.edge {
-        case .right: return p.x >= f.minX - margin
-        case .left: return p.x <= f.maxX + margin
-        case .bottom: return p.y <= f.maxY + margin
+        case .right: return p.x >= f.minX
+        case .left: return p.x <= f.maxX
+        case .bottom: return p.y <= f.maxY
         }
     }
 

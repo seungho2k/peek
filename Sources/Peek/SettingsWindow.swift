@@ -31,7 +31,6 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 numberRow(settings.edge.isSide ? "Minimum Width" : "Minimum Height", unit: "pt", value: $settings.minDepth, range: 100...3000)
-                numberRow("Hide Margin", unit: "pt", value: $settings.hideMargin, range: 0...1000)
             }
 
             Section("Animation") {

@@ -72,10 +72,6 @@ final class Settings: ObservableObject {
     @Published var minDepth: Double {
         didSet { defaults.set(minDepth, forKey: "minDepth") }
     }
-    /// Extra distance (pt) past the panel's inner edge before it slides away.
-    @Published var hideMargin: Double {
-        didSet { defaults.set(hideMargin, forKey: "hideMargin") }
-    }
     @Published var shortcuts: [ShortcutAction: Shortcut] {
         didSet { saveShortcuts() }
     }
@@ -90,7 +86,7 @@ final class Settings: ObservableObject {
         edge = PeekEdge(rawValue: defaults.string(forKey: "edge") ?? "") ?? .right
         slideInMs = defaults.object(forKey: "slideInMs") as? Double ?? 150
         slideOutMs = defaults.object(forKey: "slideOutMs") as? Double ?? 120
-        hideMargin = defaults.object(forKey: "hideMargin") as? Double ?? 40
+        defaults.removeObject(forKey: "hideMargin")  // setting removed
         minDepth = defaults.object(forKey: "minDepth") as? Double ?? 200
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
         bottomHeight = CGFloat(defaults.object(forKey: "bottomHeight") as? Double ?? Double(Self.defaultBottomHeight))
