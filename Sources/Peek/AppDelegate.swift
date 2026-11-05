@@ -50,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.panelController.showSettings()
                     let sp = self.panelController.settingsPanel.panel
                     print("settings: note=\(self.panelController.panel.frame) settings=\(sp.frame) visible=\(sp.isVisible) key=\(sp.isKeyWindow)")
+                    for w in NSApp.windows where w.isVisible { print("  open: \(type(of: w)) \(w.frame)") }
                     self.panelController.hideSettings()
                     print("settings closed: note=\(self.panelController.panel.frame)")
                 }

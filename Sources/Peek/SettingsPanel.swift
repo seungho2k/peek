@@ -31,7 +31,6 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.delegate = self
-        textView.hidesLineNumbers = true
         textView.onOpenSettings = { [weak self] in self?.onClose?() }
         textView.onEscape = { [weak self] in self?.onClose?() }
 

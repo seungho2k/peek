@@ -102,9 +102,9 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         }
     }
 
-    /// Calls `body` for each numbered line intersecting `rect` (view coordinates) with its
-    /// number and the top y of its label, baseline-aligned with the line's text.
-    /// Numbering: text lines only, 00 after the start and after every rule; images skipped.
+    /// Calls `body` for each line intersecting `rect` (view coordinates) with its number and the
+    /// top y of its label (baseline-aligned on text lines). Every line counts — text, rules and
+    /// image rows — from 00.
     func enumerateLineNumbers(in rect: NSRect, _ body: (Int, CGFloat) -> Void) {
         guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
         let ns = storage.string as NSString
@@ -120,15 +120,10 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         var index = 0
         while index < ns.length {
             let paragraph = ns.paragraphRange(for: NSRange(location: index, length: 0))
-            let attachment = storage.attribute(.attachment, at: index, effectiveRange: nil)
-            if attachment is RuleAttachment {
-                number = 0
-            } else if attachment == nil {
-                let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
-                if frag.minY + originY > rect.maxY { return }
-                emit(number, frag.minY)
-                number += 1
-            }
+            let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
+            if frag.minY + originY > rect.maxY { return }
+            emit(number, frag.minY)
+            number += 1
             index = NSMaxRange(paragraph)
         }
         if lm.extraLineFragmentTextContainer === tc {

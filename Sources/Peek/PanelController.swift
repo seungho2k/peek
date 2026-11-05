@@ -28,6 +28,7 @@ final class PanelController: NSObject {
 
     let settingsPanel = SettingsPanelController()
     private lazy var lineNumberOverlay = LineNumberOverlay(textView: editor.textView)
+    private lazy var settingsLineNumberOverlay = LineNumberOverlay(textView: settingsPanel.textView)
     /// The note was narrowed to make room for the settings panel.
     private var shrunkForSettings = false
     /// The settings are open (they fade out and back in with the note).
@@ -200,19 +201,22 @@ final class PanelController: NSObject {
 
     // MARK: Outside line numbers
 
-    /// The outside line numbers sit where the settings panel docks, so they hide while it's open.
-    private var wantsLineNumberOverlay: Bool {
-        settings.lineNumbers == .outside && !settingsOpen && progress > 0
+    /// The note's outside numbers sit where the settings panel docks, so while settings are open
+    /// the numbers move outside the settings panel instead (for its own lines).
+    private func updateLineNumberOverlay() {
+        let outside = settings.lineNumbers == .outside && progress > 0
+        show(lineNumberOverlay, beside: panel.frame, if: outside && !settingsOpen)
+        show(settingsLineNumberOverlay, beside: settingsPanel.panel.frame, if: outside && settingsOpen)
     }
 
-    private func updateLineNumberOverlay() {
-        guard wantsLineNumberOverlay else {
-            if lineNumberOverlay.window.isVisible { lineNumberOverlay.window.orderOut(nil) }
+    private func show(_ overlay: LineNumberOverlay, beside frame: NSRect, if visible: Bool) {
+        guard visible else {
+            if overlay.window.isVisible { overlay.window.orderOut(nil) }
             return
         }
-        lineNumberOverlay.place(besideNote: panel.frame, edge: settings.edge)
-        lineNumberOverlay.window.alphaValue = progress
-        if !lineNumberOverlay.window.isVisible { lineNumberOverlay.window.orderFrontRegardless() }
+        overlay.place(besideNote: frame, edge: settings.edge)
+        overlay.window.alphaValue = progress
+        if !overlay.window.isVisible { overlay.window.orderFrontRegardless() }
     }
 
     // MARK: Show / hide
@@ -277,6 +281,7 @@ final class PanelController: NSObject {
         }
         let x = settings.edge == .right ? max(vf.minX, note.minX - width) : min(vf.maxX - width, note.maxX)
         settingsPanel.setFrame(NSRect(x: x, y: vf.minY, width: width, height: vf.height))
+        updateLineNumberOverlay()
     }
 
     func hide() {
@@ -335,6 +340,7 @@ final class PanelController: NSObject {
             panel.orderOut(nil)
             if settingsOpen { settingsPanel.panel.orderOut(nil) }  // still open; returns with the note
             lineNumberOverlay.window.orderOut(nil)
+            settingsLineNumberOverlay.window.orderOut(nil)
             editor.saveNow()
         }
     }

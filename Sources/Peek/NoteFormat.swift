@@ -255,7 +255,7 @@ enum NoteFormat {
 
             ensureColor(storage, withBreak)
             ensureParagraph(storage, withBreak, kind(of: storage, line: line) == .text
-                ? Theme.textParagraph(lineNumbers: lineNumbers) : Theme.blockParagraph)
+                ? Theme.textParagraph(lineNumbers: lineNumbers) : Theme.blockParagraph(lineNumbers: lineNumbers))
             if bold && line.length > 0 {
                 ensureFont(storage, line, bold: true)
                 ensureFont(storage, NSRange(location: NSMaxRange(line), length: withBreak.length - line.length), bold: false)

@@ -5,6 +5,14 @@ func containerLineWidth(_ container: NSTextContainer) -> CGFloat {
     max(1, container.size.width - 2 * container.lineFragmentPadding)
 }
 
+/// Width for a block (image row or rule) on the line at `charIndex`: from its head indent to
+/// the right inset.
+func blockWidth(_ storage: NSAttributedString, at charIndex: Int, _ container: NSTextContainer) -> CGFloat {
+    let style = charIndex < storage.length
+        ? storage.attribute(.paragraphStyle, at: charIndex, effectiveRange: nil) as? NSParagraphStyle : nil
+    return max(1, containerLineWidth(container) - (style?.headIndent ?? Theme.blockSideInset) - Theme.blockSideInset)
+}
+
 // MARK: Horizontal rule
 
 final class RuleAttachment: NSTextAttachment {
@@ -25,8 +33,9 @@ final class RuleCell: NSTextAttachmentCell {
     ) -> NSRect {
         let font = Theme.font
         let height = ceil(font.ascender - font.descender + font.leading)
-        // Edge to edge like image rows.
-        let width = containerLineWidth(textContainer) - 2 * Theme.blockSideInset
+        // Like image rows: from the line's indent to the right edge.
+        let width = textContainer.layoutManager?.textStorage.map { blockWidth($0, at: charIndex, textContainer) }
+            ?? containerLineWidth(textContainer) - 2 * Theme.blockSideInset
         return NSRect(x: 0, y: floor(font.descender), width: max(1, width), height: height)
     }
 
@@ -129,7 +138,7 @@ final class ImageCell: NSTextAttachmentCell {
         }
         guard !items.isEmpty else { return [] }
         let gaps = Theme.imageGap * CGFloat(items.count - 1)
-        let rowWidth = containerLineWidth(container) - 2 * Theme.blockSideInset - gaps
+        let rowWidth = blockWidth(storage, at: charIndex, container) - gaps
         let height = max(1, floor(rowWidth / max(items.reduce(0) { $0 + $1.aspect }, 0.01)))
         var used: CGFloat = 0
         return items.enumerated().map { i, item in
