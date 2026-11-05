@@ -9,7 +9,7 @@ final class SettingsWindowController {
         if window == nil {
             let hosting = NSHostingController(rootView: SettingsView(settings: .shared))
             let w = NSWindow(contentViewController: hosting)
-            w.title = "peek 설정"
+            w.title = "peek Settings"
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             w.center()
@@ -25,18 +25,18 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("패널") {
-                Picker("피크 방향", selection: $settings.edge) {
+            Section("Panel") {
+                Picker("Peek From", selection: $settings.edge) {
                     ForEach(PeekEdge.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                numberRow(settings.edge.isSide ? "최소 너비" : "최소 높이", unit: "pt", value: $settings.minDepth, range: 100...3000)
-                numberRow("숨김 여백", unit: "pt", value: $settings.hideMargin, range: 0...1000)
+                numberRow(settings.edge.isSide ? "Minimum Width" : "Minimum Height", unit: "pt", value: $settings.minDepth, range: 100...3000)
+                numberRow("Hide Margin", unit: "pt", value: $settings.hideMargin, range: 0...1000)
             }
 
-            Section("애니메이션") {
-                numberRow("나올 때", unit: "ms", value: $settings.slideInMs, range: 0...5000)
-                numberRow("들어갈 때", unit: "ms", value: $settings.slideOutMs, range: 0...5000)
+            Section("Animation") {
+                numberRow("Fade In", unit: "ms", value: $settings.slideInMs, range: 0...5000)
+                numberRow("Fade Out", unit: "ms", value: $settings.slideOutMs, range: 0...5000)
             }
 
             Section {
@@ -46,22 +46,22 @@ struct SettingsView: View {
                     }
                 }
             } header: {
-                Text("단축키")
+                Text("Shortcuts")
             } footer: {
                 HStack {
-                    Text("Ctrl+H/J/K/L은 방향키로 고정.")
+                    Text("Ctrl+H/J/K/L always act as arrow keys.")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("기본값으로") { settings.resetShortcuts() }
+                    Button("Restore Defaults") { settings.resetShortcuts() }
                 }
             }
 
             Section {
-                Toggle("로그인 시 자동 실행", isOn: $settings.launchAtLogin)
+                Toggle("Launch at Login", isOn: $settings.launchAtLogin)
             }
 
             Section {
-                Button("peek 종료") { NSApp.terminate(nil) }
+                Button("Quit peek") { NSApp.terminate(nil) }
             }
         }
         .formStyle(.grouped)
@@ -103,7 +103,7 @@ struct ShortcutRecorderView: View {
                     recorder.start { settings.shortcuts[action] = $0 }
                 }
             } label: {
-                Text(recorder.isRecording ? "키 입력…" : shortcut.displayString)
+                Text(recorder.isRecording ? "Type Shortcut…" : shortcut.displayString)
                     .frame(minWidth: 72)
             }
             if let conflict {
@@ -114,10 +114,10 @@ struct ShortcutRecorderView: View {
 
     private func conflictMessage(for shortcut: Shortcut) -> String? {
         if let other = ShortcutAction.allCases.first(where: { $0 != action && settings.shortcut(for: $0) == shortcut }) {
-            return "‘\(other.title)’와 겹침"
+            return "Conflicts with “\(other.title)”"
         }
         if Self.reserved.contains(shortcut) {
-            return "기본 단축키와 겹침"
+            return "Conflicts with a built-in shortcut"
         }
         return nil
     }

@@ -485,7 +485,6 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         switch action {
         case .top: moveToDocumentStart()
         case .bold: toggleBold()
-        case .list: toggleList()
         case .rule: insertRule()
         case .pin: break  // global hotkey, handled by PanelController
         case .settings: onOpenSettings?()
@@ -533,19 +532,6 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
             attrs[.font] = Theme.boldFont
         }
         typingAttributes = attrs
-    }
-
-    private func toggleList() {
-        let textLines = selectedLines.filter { kind(of: $0) == .text }
-        guard !textLines.isEmpty else { return }
-        let prefixes = textLines.map { NoteFormat.listPrefixLength(text(of: $0)) }
-        if prefixes.allSatisfy({ $0 > 0 }) {
-            applyEdits(zip(textLines, prefixes).map { (NSRange(location: $0.location, length: $1), plain("")) })
-        } else {
-            applyEdits(zip(textLines, prefixes).compactMap { line, prefix in
-                prefix > 0 ? nil : (NSRange(location: line.location, length: 0), plain("- "))
-            })
-        }
     }
 
     private func insertRule() {

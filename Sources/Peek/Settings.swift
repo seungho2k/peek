@@ -7,34 +7,32 @@ enum PeekEdge: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .right: "오른쪽"
-        case .left: "왼쪽"
-        case .bottom: "아래"
+        case .right: "Right"
+        case .left: "Left"
+        case .bottom: "Bottom"
         }
     }
     var isSide: Bool { self != .bottom }
 }
 
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
-    case top, bold, list, rule, fill, pin, settings
+    case top, bold, rule, fill, pin, settings
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .top: "문서 맨 앞으로"
-        case .bold: "굵게"
-        case .list: "리스트"
-        case .rule: "수평선"
-        case .fill: "화면 가득 채우기 토글"
-        case .pin: "peek 열고 pin (전역)"
-        case .settings: "설정 열기"
+        case .top: "Go to Top"
+        case .bold: "Bold Line"
+        case .rule: "Horizontal Rule"
+        case .fill: "Toggle Fill Screen"
+        case .pin: "Open & Pin (Global)"
+        case .settings: "Open Settings"
         }
     }
     var defaultShortcut: Shortcut {
         switch self {
         case .top: Shortcut(keyCode: KeyCode.zero, modifiers: .command)
         case .bold: Shortcut(keyCode: KeyCode.b, modifiers: .command)
-        case .list: Shortcut(keyCode: KeyCode.l, modifiers: .command)
-        case .rule: Shortcut(keyCode: KeyCode.minus, modifiers: .command)
+        case .rule: Shortcut(keyCode: KeyCode.l, modifiers: .command)
         case .fill: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
         case .pin: Shortcut(keyCode: KeyCode.space, modifiers: .option)
         case .settings: Shortcut(keyCode: KeyCode.comma, modifiers: .command)
@@ -105,14 +103,16 @@ final class Settings: ObservableObject {
         // v1 defaults were ⌘1/⌘2/⌘3; move untouched ones to the current defaults.
         let version = defaults.integer(forKey: "shortcutsVersion")
         if version < 2 {
-            let v1: [ShortcutAction: UInt16] = [.bold: KeyCode.two, .list: KeyCode.three]
+            let v1: [ShortcutAction: UInt16] = [.bold: KeyCode.two]
             for (a, key) in v1 where sc[a] == Shortcut(keyCode: key, modifiers: .command) { sc[a] = nil }
         }
         // v2 had an in-panel ⌘P pin toggle; pin is now a global ⌥Space hotkey.
         if version < 3, sc[.pin] == Shortcut(keyCode: KeyCode.p, modifiers: .command) { sc[.pin] = nil }
         // v3 used ⌘↩ for the rule; ⌘↩ now toggles fill and the rule moved to ⌘-.
         if version < 4, sc[.rule] == Shortcut(keyCode: KeyCode.returnKey, modifiers: .command) { sc[.rule] = nil }
-        defaults.set(4, forKey: "shortcutsVersion")
+        // v4 used ⌘- for the rule; it's ⌘L now (the list shortcut was removed).
+        if version < 5, sc[.rule] == Shortcut(keyCode: KeyCode.minus, modifiers: .command) { sc[.rule] = nil }
+        defaults.set(5, forKey: "shortcutsVersion")
         for a in ShortcutAction.allCases where sc[a] == nil { sc[a] = a.defaultShortcut }
         shortcuts = sc
 

@@ -17,13 +17,13 @@ scripts/build.sh release  # build/peek.app 생성 (ad-hoc 서명)
 scripts/install.sh        # release 빌드 → /Applications/peek.app 설치 후 실행
 ```
 
-그다음 화면 끝으로 마우스 → ⌘, 로 설정을 열어 "로그인 시 자동 실행"을 켜면 재부팅 후에도 자동으로 뜬다.
+그다음 화면 끝으로 마우스 → ⌘, 로 설정을 열어 "Launch at Login"을 켜면 재부팅 후에도 자동으로 뜬다.
 
 ## 사용
 
 - 화면 오른쪽 끝(설정에서 왼쪽/아래로 변경)에 마우스를 대면 노트가 나오고, 벗어나면 들어간다. 입력하려면 노트를 클릭.
 - 설정: 노트에서 ⌘, 또는 peek를 한 번 더 실행.
-- 단축키(기본): ⌘0 문서 맨 앞, ⌘B 굵게, ⌘L 리스트, ⌘- 수평선, ⌘↩ 화면 가득 토글, ⌥Space 열고 pin(전역), Ctrl+H/J/K/L 방향키.
+- 단축키(기본): ⌘0 문서 맨 앞, ⌘B 굵게, ⌘L 수평선, ⌘↩ 화면 가득 토글, ⌥Space 열고 pin(전역), Ctrl+H/J/K/L 방향키.
 - 데이터: `~/Library/Application Support/peek/note.md`, `images/`.
 
 ## 개발
