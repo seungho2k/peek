@@ -9,8 +9,8 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
 
     /// Never show line numbers in this view (the settings panel); otherwise follow the setting.
     var hidesLineNumbers = false
-    var showsLineNumbers: Bool { !hidesLineNumbers && Theme.showLineNumbers }
-    var baseAttributes: [NSAttributedString.Key: Any] { NoteFormat.baseAttributes(lineNumbers: showsLineNumbers) }
+    var lineNumberMode: LineNumberMode { hidesLineNumbers ? .off : Theme.lineNumberMode }
+    var baseAttributes: [NSAttributedString.Key: Any] { NoteFormat.baseAttributes(lineNumbers: lineNumberMode) }
     var onToggleFill: (() -> Void)?
 
     /// Quick Look state (see NoteTextView+QuickLook).
@@ -95,21 +95,28 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// Image and rule lines are not counted; numbering restarts at 00 after every rule.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
-        guard showsLineNumbers else { return }
+        let mode = lineNumberMode
+        guard mode != .off else { return }
         guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
         let ns = storage.string as NSString
         let origin = textContainerOrigin
         let font = Theme.font
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: Theme.lineNumber]
         let cell = Theme.digitCell
-        let numbersRight = Theme.gutterWidth - Theme.spaceWidth
+        // Left: inside the gutter. Right: against the right edge, over the text area.
+        let numbersRight = mode == .left
+            ? Theme.gutterWidth - Theme.spaceWidth
+            : tc.size.width - Theme.spaceWidth
         let labelBaseline = lm.defaultBaselineOffset(for: font)
 
-        func draw(_ number: Int, lineTop: CGFloat) {
+        func draw(_ number: Int, lineTop: CGFloat, textEnd: CGFloat = 0) {
             let y = lineTop + origin.y + Theme.lineMetrics.baseline - labelBaseline
             guard y + Theme.lineMetrics.height >= rect.minY, y <= rect.maxY else { return }
             let digits = String(format: "%02d", number)
-            var x = origin.x + numbersRight - CGFloat(digits.count) * cell
+            let numberLeft = numbersRight - CGFloat(digits.count) * cell
+            // Right side: the number gives way when its line's text reaches it.
+            if mode == .right && textEnd > numberLeft - Theme.spaceWidth { return }
+            var x = origin.x + numberLeft
             for d in digits {
                 let glyph = String(d) as NSString
                 let w = glyph.size(withAttributes: attrs).width
@@ -126,9 +133,12 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
             if attachment is RuleAttachment {
                 number = 0  // each rule starts a new section, counted from 00
             } else if attachment == nil {
-                let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
+                let glyph = lm.glyphIndexForCharacter(at: index)
+                let frag = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
                 if frag.minY + origin.y > rect.maxY { return }
-                draw(number, lineTop: frag.minY)
+                // Where the text of this line's first row ends (empty lines: nothing).
+                let used = paragraph.length > 1 ? lm.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil).maxX : 0
+                draw(number, lineTop: frag.minY, textEnd: used)
                 number += 1
             }
             index = NSMaxRange(paragraph)
@@ -169,7 +179,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         range editedRange: NSRange, changeInLength delta: Int
     ) {
         MainActor.assumeIsolated {
-            NoteFormat.restyle(textStorage, range: editedRange, lineNumbers: showsLineNumbers)
+            NoteFormat.restyle(textStorage, range: editedRange, lineNumbers: lineNumberMode)
             lastEditedRange = editedRange
             if editedMask.contains(.editedCharacters) {
                 pendingNormalizeRange = pendingNormalizeRange.map {

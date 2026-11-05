@@ -13,6 +13,12 @@ enum PeekEdge: String, CaseIterable, Identifiable {
     }
 }
 
+/// Where line numbers go. `right`: overlaid at the right edge, taking no space; a number is
+/// hidden when its line's text reaches it. `left`: in a gutter the text is indented past.
+enum LineNumberMode: String, CaseIterable {
+    case left, right, off
+}
+
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
     case bold, rule, fill, pin, settings
     var id: String { rawValue }
@@ -61,9 +67,9 @@ final class Settings: ObservableObject {
     @Published var sideWidth: CGFloat {
         didSet { defaults.set(Double(sideWidth), forKey: "sideWidth") }
     }
-    /// Show line numbers in the left gutter (note and settings).
-    @Published var showLineNumbers: Bool {
-        didSet { defaults.set(showLineNumbers, forKey: "showLineNumbers") }
+    /// Line number placement (note only; the settings view never shows them).
+    @Published var lineNumbers: LineNumberMode {
+        didSet { defaults.set(lineNumbers.rawValue, forKey: "lineNumbers") }
     }
     /// Line 00 of every section is shown in bold.
     @Published var autoBoldFirstLine: Bool {
@@ -93,7 +99,13 @@ final class Settings: ObservableObject {
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
         defaults.removeObject(forKey: "bottomHeight")  // bottom edge removed
         autoBoldFirstLine = defaults.object(forKey: "autoBoldFirstLine") as? Bool ?? true
-        showLineNumbers = defaults.object(forKey: "showLineNumbers") as? Bool ?? true
+        // Older builds stored on/off; on now means the (experimental) right-side numbers.
+        if let mode = LineNumberMode(rawValue: defaults.string(forKey: "lineNumbers") ?? "") {
+            lineNumbers = mode
+        } else {
+            lineNumbers = (defaults.object(forKey: "showLineNumbers") as? Bool ?? true) ? .right : .off
+        }
+        defaults.removeObject(forKey: "showLineNumbers")
 
         var sc: [ShortcutAction: Shortcut] = [:]
         if let data = defaults.data(forKey: "shortcuts"),

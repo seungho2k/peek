@@ -25,7 +25,7 @@ enum SettingsText {
                 ("min-width", "\(Int(s.minDepth))"),
                 ("launch-at-login", s.launchAtLogin ? "on" : "off"),
                 ("bold-first-line", s.autoBoldFirstLine ? "on" : "off"),
-                ("line-numbers", s.showLineNumbers ? "on" : "off"),
+                ("line-numbers", s.lineNumbers.rawValue),
             ]),
             ("animations", [
                 ("fade-in", "\(Int(s.slideInMs))"),
@@ -45,7 +45,7 @@ enum SettingsText {
         case fadeOut(Double)
         case launchAtLogin(Bool)
         case autoBoldFirstLine(Bool)
-        case lineNumbers(Bool)
+        case lineNumbers(LineNumberMode)
         case shortcut(ShortcutAction, Shortcut)
     }
 
@@ -127,7 +127,8 @@ enum SettingsText {
         case "bold-first-line":
             return onOff(value).map { .ok(.autoBoldFirstLine($0)) } ?? .badValue
         case "line-numbers":
-            return onOff(value).map { .ok(.lineNumbers($0)) } ?? .badValue
+            if let mode = LineNumberMode(rawValue: value) { return .ok(.lineNumbers(mode)) }
+            return onOff(value).map { .ok(.lineNumbers($0 ? .left : .off)) } ?? .badValue  // on = left
         default:
             guard let action = shortcutKeys.first(where: { $0.key == key })?.action else { return .unknownKey }
             guard let sc = ShortcutText.parse(value),
@@ -146,7 +147,7 @@ enum SettingsText {
             case .fadeOut(let n): if s.slideOutMs != n { s.slideOutMs = n }
             case .launchAtLogin(let on): if s.launchAtLogin != on { s.launchAtLogin = on }
             case .autoBoldFirstLine(let on): if s.autoBoldFirstLine != on { s.autoBoldFirstLine = on }
-            case .lineNumbers(let on): if s.showLineNumbers != on { s.showLineNumbers = on }
+            case .lineNumbers(let mode): if s.lineNumbers != mode { s.lineNumbers = mode }
             case .shortcut(let action, let sc): if s.shortcut(for: action) != sc { s.shortcuts[action] = sc }
             }
         }

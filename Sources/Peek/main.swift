@@ -11,7 +11,7 @@ MainActor.assumeIsolated {
         _ = NSApplication.shared
         DebugLog.enabled = false
         NoteFormat.autoBoldFirstLine = Settings.shared.autoBoldFirstLine
-        Theme.showLineNumbers = Settings.shared.showLineNumbers
+        Theme.lineNumberMode = Settings.shared.lineNumbers
         SettingsPanelController().debugRender(to: CommandLine.arguments[i + 1])
         exit(0)
     }

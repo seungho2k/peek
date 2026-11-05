@@ -14,7 +14,9 @@ enum SelfTest {
         window.backgroundColor = Theme.background
         editor.scrollView.frame = window.contentView!.bounds
         window.contentView!.addSubview(editor.scrollView)
-        if ProcessInfo.processInfo.environment["PEEK_LINE_NUMBERS"] == "off" { Theme.showLineNumbers = false }
+        if let mode = LineNumberMode(rawValue: ProcessInfo.processInfo.environment["PEEK_LINE_NUMBERS"] ?? "") {
+            Theme.lineNumberMode = mode
+        }
         let sample = ProcessInfo.processInfo.environment["PEEK_RENDER_TEXT"]?.replacingOccurrences(of: "\\n", with: "\n")
         editor.textView.load(markdown: sample ?? "한글 제목 line\n**굵은 줄**\n- 리스트\n  - 들여쓰기\n---\n마지막\n")
         editor.scrollView.tile()

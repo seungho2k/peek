@@ -25,9 +25,9 @@ enum NoteFormat {
     static let attachmentChar = Character(UnicodeScalar(NSTextAttachment.character)!)
     static let imageRef = try! NSRegularExpression(pattern: #"!\[\]\(images/([^)\s/]+)\)"#)
 
-    static var baseAttributes: [NSAttributedString.Key: Any] { baseAttributes(lineNumbers: Theme.showLineNumbers) }
+    static var baseAttributes: [NSAttributedString.Key: Any] { baseAttributes(lineNumbers: Theme.lineNumberMode) }
 
-    static func baseAttributes(lineNumbers: Bool) -> [NSAttributedString.Key: Any] {
+    static func baseAttributes(lineNumbers: LineNumberMode) -> [NSAttributedString.Key: Any] {
         [.font: Theme.font, .foregroundColor: Theme.text, .paragraphStyle: Theme.textParagraph(lineNumbers: lineNumbers)]
     }
 
@@ -243,7 +243,7 @@ enum NoteFormat {
     /// unconditionally would throw the caret to the end of the line mid-composition.
     /// Fonts are compared by size and weight only, so fallback fonts that AppKit substitutes
     /// (e.g. Apple SD Gothic Neo for Hangul) are left alone.
-    static func restyle(_ storage: NSTextStorage, range: NSRange, lineNumbers: Bool = Theme.showLineNumbers) {
+    static func restyle(_ storage: NSTextStorage, range: NSRange, lineNumbers: LineNumberMode = Theme.lineNumberMode) {
         let ns = storage.string as NSString
         guard ns.length > 0 else { return }
         let start = min(range.location, ns.length)
