@@ -227,11 +227,13 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
     }
 
     override func insertText(_ string: Any, replacementRange: NSRange) {
+        DebugLog.log("insertText \(String(describing: (string as? NSAttributedString)?.string ?? string)) rr=\(replacementRange) marked=\(hasMarkedText())")
         if replacementRange.location == NSNotFound { moveOffBlockLineForTyping() }
         super.insertText(string, replacementRange: replacementRange)
     }
 
     override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        DebugLog.log("setMarkedText \(String(describing: (string as? NSAttributedString)?.string ?? string)) rr=\(replacementRange) marked=\(hasMarkedText())")
         if !hasMarkedText() && replacementRange.location == NSNotFound { moveOffBlockLineForTyping() }
         super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
     }
@@ -359,6 +361,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
     }
 
     override func keyDown(with event: NSEvent) {
+        DebugLog.log("keyDown code=\(event.keyCode) chars=\(event.characters ?? "") ctx=\(inputContext.map { "\($0 === NSTextInputContext.current)" } ?? "nil") \(DebugLog.state)")
         if handleKey(event) { return }
         super.keyDown(with: event)
     }
@@ -409,7 +412,27 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
     }
 
     /// Finishes an in-progress IME composition (e.g. a Korean syllable) as typed.
-    private func commitComposition() {
+    override func unmarkText() {
+        DebugLog.log("unmarkText")
+        super.unmarkText()
+    }
+
+    override func doCommand(by selector: Selector) {
+        DebugLog.log("doCommand \(selector)")
+        super.doCommand(by: selector)
+    }
+
+    override func resignFirstResponder() -> Bool {
+        DebugLog.log("resignFirstResponder")
+        return super.resignFirstResponder()
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        DebugLog.log("becomeFirstResponder")
+        return super.becomeFirstResponder()
+    }
+
+    func commitComposition() {
         guard hasMarkedText() else { return }
         unmarkText()
         inputContext?.discardMarkedText()

@@ -49,6 +49,14 @@ final class PanelController: NSObject {
         editor.textView.onPinToggle = { [weak self] in self?.togglePin() }
         editor.textView.onOpenSettings = { [weak self] in self?.onOpenSettings?() }
 
+        #if DEBUG
+        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
+                     NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { n in
+                DebugLog.log("\(n.name.rawValue) \((n.object as? NSWindow).map { String(describing: type(of: $0)) } ?? "")")
+            }
+        }
+        #endif
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
@@ -255,6 +263,7 @@ final class PanelController: NSObject {
     private var hasFocus: Bool { NSApp.isActive && panel.isKeyWindow }
 
     private func takeFocus() {
+        DebugLog.log("takeFocus \(DebugLog.state)")
         if !NSApp.isActive {
             let front = NSWorkspace.shared.frontmostApplication
             previousApp = front == NSRunningApplication.current ? nil : front
@@ -268,6 +277,10 @@ final class PanelController: NSObject {
     /// Give keyboard focus back to the previously active app (the panel may stay on screen).
     /// If peek was already active for another reason (settings window), leave it alone.
     private func returnFocus() {
+        DebugLog.log("returnFocus activatedForPanel=\(activatedForPanel) \(DebugLog.state)")
+        // Don't leave a half-composed syllable behind; the input method would otherwise
+        // commit it later at an odd moment.
+        editor.textView.commitComposition()
         guard activatedForPanel else { return }
         activatedForPanel = false
         guard NSApp.isActive else { return }
