@@ -13,10 +13,10 @@ enum PeekEdge: String, CaseIterable, Identifiable {
     }
 }
 
-/// Where line numbers go. `right`: overlaid at the right edge, taking no space; a number is
-/// hidden when its line's text reaches it. `left`: in a gutter the text is indented past.
+/// Where line numbers go. `outside`: just outside the note (beside its inner edge), with no
+/// background; the note has no gutter. `left`: in a gutter the text is indented past.
 enum LineNumberMode: String, CaseIterable {
-    case left, right, off
+    case left, outside, off
 }
 
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
@@ -99,11 +99,13 @@ final class Settings: ObservableObject {
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
         defaults.removeObject(forKey: "bottomHeight")  // bottom edge removed
         autoBoldFirstLine = defaults.object(forKey: "autoBoldFirstLine") as? Bool ?? true
-        // Older builds stored on/off; on now means the (experimental) right-side numbers.
+        // Older builds stored on/off or the dropped "right" mode; both now mean outside.
         if let mode = LineNumberMode(rawValue: defaults.string(forKey: "lineNumbers") ?? "") {
             lineNumbers = mode
         } else {
-            lineNumbers = (defaults.object(forKey: "showLineNumbers") as? Bool ?? true) ? .right : .off
+            let wasOn = defaults.string(forKey: "lineNumbers") == "right"
+                || (defaults.object(forKey: "showLineNumbers") as? Bool ?? true)
+            lineNumbers = wasOn ? .outside : .off
         }
         defaults.removeObject(forKey: "showLineNumbers")
 

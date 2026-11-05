@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                 report("shown")
+                for w in NSApp.windows where w.isVisible { print("window \(type(of: w)) \(w.frame) alpha=\(w.alphaValue) ignoresMouse=\(w.ignoresMouseEvents)") }
                 if ProcessInfo.processInfo.environment["PEEK_SETTINGS_TOGGLE_PROBE"] != nil {
                     let pc = self.panelController!, sp = pc.settingsPanel.panel
                     func state(_ l: String) { print("\(l): note=\(pc.panel.isVisible)/\(String(format: "%.2f", pc.panel.alphaValue)) settings=\(sp.isVisible)/\(String(format: "%.2f", sp.alphaValue))") }

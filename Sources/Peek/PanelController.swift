@@ -27,6 +27,7 @@ final class PanelController: NSObject {
     private var cancellables: Set<AnyCancellable> = []
 
     let settingsPanel = SettingsPanelController()
+    private lazy var lineNumberOverlay = LineNumberOverlay(textView: editor.textView)
     /// The note was narrowed to make room for the settings panel.
     private var shrunkForSettings = false
     /// The settings are open (they fade out and back in with the note).
@@ -110,6 +111,7 @@ final class PanelController: NSObject {
         settings.$lineNumbers.dropFirst().sink { [weak self] mode in
             DispatchQueue.main.async {
                 Theme.lineNumberMode = mode
+                self?.updateLineNumberOverlay()
                 self?.editor.textView.restyleAll()
                 self?.settingsPanel.textView.restyleAll()
             }
@@ -193,6 +195,24 @@ final class PanelController: NSObject {
         }
         panel.alphaValue = progress
         if settingsOpen { settingsPanel.panel.alphaValue = progress }  // fades with the note
+        updateLineNumberOverlay()
+    }
+
+    // MARK: Outside line numbers
+
+    /// The outside line numbers sit where the settings panel docks, so they hide while it's open.
+    private var wantsLineNumberOverlay: Bool {
+        settings.lineNumbers == .outside && !settingsOpen && progress > 0
+    }
+
+    private func updateLineNumberOverlay() {
+        guard wantsLineNumberOverlay else {
+            if lineNumberOverlay.window.isVisible { lineNumberOverlay.window.orderOut(nil) }
+            return
+        }
+        lineNumberOverlay.place(besideNote: panel.frame, edge: settings.edge)
+        lineNumberOverlay.window.alphaValue = progress
+        if !lineNumberOverlay.window.isVisible { lineNumberOverlay.window.orderFrontRegardless() }
     }
 
     // MARK: Show / hide
@@ -216,6 +236,7 @@ final class PanelController: NSObject {
     func showSettings() {
         settingsPanel.load()
         settingsOpen = true
+        updateLineNumberOverlay()
         if target == 0 { show() } else { layoutSettings() }
         settingsPanel.panel.alphaValue = progress
         settingsPanel.present()
@@ -229,6 +250,7 @@ final class PanelController: NSObject {
     func hideSettings() {
         settingsOpen = false
         settingsPanel.hide()
+        updateLineNumberOverlay()
         if shrunkForSettings {
             // Give the note its own width back.
             shrunkForSettings = false
@@ -312,6 +334,7 @@ final class PanelController: NSObject {
         if target == 0 {
             panel.orderOut(nil)
             if settingsOpen { settingsPanel.panel.orderOut(nil) }  // still open; returns with the note
+            lineNumberOverlay.window.orderOut(nil)
             editor.saveNow()
         }
     }

@@ -86,7 +86,7 @@ enum Theme {
         paragraph(indent: lineNumbers == .left ? gutterWidth : textRightMargin)
     }
     /// Mirrors the line-numbers setting.
-    nonisolated(unsafe) static var lineNumberMode: LineNumberMode = .right
+    nonisolated(unsafe) static var lineNumberMode: LineNumberMode = .outside
     static let blockParagraph = paragraph(indent: blockSideInset)
     /// Image rows and rules keep this much from both panel edges (so they don't cover the border).
     static let blockSideInset: CGFloat = 1

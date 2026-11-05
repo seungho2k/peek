@@ -128,6 +128,7 @@ enum SettingsText {
             return onOff(value).map { .ok(.autoBoldFirstLine($0)) } ?? .badValue
         case "line-numbers":
             if let mode = LineNumberMode(rawValue: value) { return .ok(.lineNumbers(mode)) }
+            if value == "right" { return .ok(.lineNumbers(.outside)) }  // dropped experiment
             return onOff(value).map { .ok(.lineNumbers($0 ? .left : .off)) } ?? .badValue  // on = left
         default:
             guard let action = shortcutKeys.first(where: { $0.key == key })?.action else { return .unknownKey }

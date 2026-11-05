@@ -95,34 +95,25 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// Image and rule lines are not counted; numbering restarts at 00 after every rule.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
-        let mode = lineNumberMode
-        guard mode != .off else { return }
+        guard lineNumberMode == .left else { return }  // outside: drawn by LineNumberOverlay
+        let right = textContainerOrigin.x + Theme.gutterWidth - Theme.spaceWidth
+        enumerateLineNumbers(in: rect) { number, labelTop in
+            LineNumberLabel.draw(number, rightEdge: right, top: labelTop)
+        }
+    }
+
+    /// Calls `body` for each numbered line intersecting `rect` (view coordinates) with its
+    /// number and the top y of its label, baseline-aligned with the line's text.
+    /// Numbering: text lines only, 00 after the start and after every rule; images skipped.
+    func enumerateLineNumbers(in rect: NSRect, _ body: (Int, CGFloat) -> Void) {
         guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
         let ns = storage.string as NSString
-        let origin = textContainerOrigin
-        let font = Theme.font
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: Theme.lineNumber]
-        let cell = Theme.digitCell
-        // Left: inside the gutter. Right: against the right edge, over the text area.
-        let numbersRight = mode == .left
-            ? Theme.gutterWidth - Theme.spaceWidth
-            : tc.size.width - Theme.spaceWidth
-        let labelBaseline = lm.defaultBaselineOffset(for: font)
+        let originY = textContainerOrigin.y
+        let labelOffset = Theme.lineMetrics.baseline - LineNumberLabel.baseline
 
-        func draw(_ number: Int, lineTop: CGFloat, textEnd: CGFloat = 0) {
-            let y = lineTop + origin.y + Theme.lineMetrics.baseline - labelBaseline
-            guard y + Theme.lineMetrics.height >= rect.minY, y <= rect.maxY else { return }
-            let digits = String(format: "%02d", number)
-            let numberLeft = numbersRight - CGFloat(digits.count) * cell
-            // Right side: the number gives way when its line's text reaches it.
-            if mode == .right && textEnd > numberLeft - Theme.spaceWidth { return }
-            var x = origin.x + numberLeft
-            for d in digits {
-                let glyph = String(d) as NSString
-                let w = glyph.size(withAttributes: attrs).width
-                glyph.draw(at: NSPoint(x: x + (cell - w) / 2, y: y), withAttributes: attrs)
-                x += cell
-            }
+        func emit(_ number: Int, _ lineTop: CGFloat) {
+            let y = lineTop + originY + labelOffset
+            if y + Theme.lineMetrics.height >= rect.minY && y <= rect.maxY { body(number, y) }
         }
 
         var number = 0
@@ -131,20 +122,17 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
             let paragraph = ns.paragraphRange(for: NSRange(location: index, length: 0))
             let attachment = storage.attribute(.attachment, at: index, effectiveRange: nil)
             if attachment is RuleAttachment {
-                number = 0  // each rule starts a new section, counted from 00
+                number = 0
             } else if attachment == nil {
-                let glyph = lm.glyphIndexForCharacter(at: index)
-                let frag = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
-                if frag.minY + origin.y > rect.maxY { return }
-                // Where the text of this line's first row ends (empty lines: nothing).
-                let used = paragraph.length > 1 ? lm.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil).maxX : 0
-                draw(number, lineTop: frag.minY, textEnd: used)
+                let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
+                if frag.minY + originY > rect.maxY { return }
+                emit(number, frag.minY)
                 number += 1
             }
             index = NSMaxRange(paragraph)
         }
         if lm.extraLineFragmentTextContainer === tc {
-            draw(number, lineTop: lm.extraLineFragmentRect.minY)
+            emit(number, lm.extraLineFragmentRect.minY)
         }
     }
 
