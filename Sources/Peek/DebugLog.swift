@@ -12,8 +12,12 @@ enum DebugLog {
     private static let start = CACurrentMediaTime()
     #endif
 
+    /// Off for self tests / renders, so they don't clobber the app's trace.
+    nonisolated(unsafe) static var enabled = true
+
     static func log(_ message: @autoclosure () -> String) {
         #if DEBUG
+        guard enabled else { return }
         let line = String(format: "%8.3f ", CACurrentMediaTime() - start) + message() + "\n"
         handle?.write(Data(line.utf8))
         #endif
