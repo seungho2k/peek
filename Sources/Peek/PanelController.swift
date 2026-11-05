@@ -321,8 +321,10 @@ final class PanelController: NSObject {
         }
     }
 
+    /// Clicking the panel focuses it and pins it, so it stays while you work elsewhere.
     private func panelClicked() {
         focusedByClick = true
+        isPinned = true
     }
 
     /// Give keyboard focus back to the previously active app (the panel may stay on screen).
