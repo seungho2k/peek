@@ -76,13 +76,15 @@ enum Theme {
 
     /// Paragraph styles: text/rule lines start after the gutter; image lines use the full width.
     static var textParagraph: NSParagraphStyle { paragraph(indent: gutterWidth) }
-    static let imageParagraph = paragraph(indent: 0)
+    static let imageParagraph = paragraph(indent: imageSideInset)
+    /// Image rows keep this much from both panel edges (so they don't cover the panel border).
+    static let imageSideInset: CGFloat = 1
 
     private static func paragraph(indent: CGFloat) -> NSParagraphStyle {
         let p = NSMutableParagraphStyle()
         p.firstLineHeadIndent = indent
         p.headIndent = indent
-        p.tailIndent = indent == 0 ? 0 : -textRightMargin
+        p.tailIndent = indent == imageSideInset ? 0 : -textRightMargin
         return p
     }
 

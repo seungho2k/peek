@@ -232,7 +232,7 @@ enum NoteFormat {
             let bold = kind(of: storage, line: line) == .text && isBold(storage, line: line)
 
             ensureColor(storage, withBreak)
-            ensureIndent(storage, withBreak, kind(of: storage, line: line) == .images ? 0 : Theme.gutterWidth)
+            ensureParagraph(storage, withBreak, kind(of: storage, line: line) == .images ? Theme.imageParagraph : Theme.textParagraph)
             if bold && line.length > 0 {
                 ensureFont(storage, line, bold: true)
                 ensureFont(storage, NSRange(location: NSMaxRange(line), length: withBreak.length - line.length), bold: false)
@@ -260,10 +260,9 @@ enum NoteFormat {
         for r in fixes { storage.addAttribute(.font, value: target, range: r) }
     }
 
-    private static func ensureIndent(_ storage: NSTextStorage, _ range: NSRange, _ indent: CGFloat) {
+    private static func ensureParagraph(_ storage: NSTextStorage, _ range: NSRange, _ style: NSParagraphStyle) {
         guard range.length > 0 else { return }
         var fixes: [NSRange] = []
-        let style = indent == 0 ? Theme.imageParagraph : Theme.textParagraph
         storage.enumerateAttribute(.paragraphStyle, in: range) { value, r, _ in
             let p = value as? NSParagraphStyle
             if p?.headIndent != style.headIndent || p?.firstLineHeadIndent != style.firstLineHeadIndent

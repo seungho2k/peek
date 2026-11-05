@@ -243,11 +243,12 @@ enum SelfTest {
         lm.ensureLayout(for: tc)
         let r0 = lm.boundingRect(forGlyphRange: NSRange(location: 0, length: 1), in: tc)
         let r1 = lm.boundingRect(forGlyphRange: NSRange(location: 1, length: 1), in: tc)
-        let usable = tc.size.width - 1  // image lines have no indent
-        print("     row: \(r0) \(r1) usable=\(usable)")
+        let inset = Theme.imageSideInset
+        print("     row: \(r0) \(r1) container=\(tc.size.width)")
         expect("row images share height", abs(r0.height - r1.height) < 1)
         expect("row on one line", abs(r0.minY - r1.minY) < 1)
-        expect("row fills width", r1.maxX - r0.minX > usable - 4 && r1.maxX - r0.minX <= usable + 1)
+        expect("row starts at the left inset", abs(r0.minX - inset) < 0.01)
+        expect("row ends exactly at the right inset", abs(r1.maxX - (tc.size.width - inset)) < 0.01)
         expect("aspect kept", abs(r0.width / r1.width - 2) < 0.1)
         let origin = layout.textContainerOrigin
         let hit1 = layout.imageAttachment(at: NSPoint(x: r1.midX + origin.x, y: r1.midY + origin.y))

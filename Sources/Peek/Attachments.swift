@@ -1,10 +1,8 @@
 import AppKit
 
-/// Width available on a line: the proposed line fragment accounts for the paragraph's head
-/// indent (text/rule lines sit after the line-number gutter, images don't) but not its
-/// tail indent, so rules subtract the right margin themselves.
-func usableLineWidth(_ lineFragment: NSRect, _ container: NSTextContainer) -> CGFloat {
-    max(1, lineFragment.width - 2 * container.lineFragmentPadding - 1)
+/// Full line width of the container (it spans the whole panel; indents are applied per line).
+func containerLineWidth(_ container: NSTextContainer) -> CGFloat {
+    max(1, container.size.width - 2 * container.lineFragmentPadding)
 }
 
 // MARK: Horizontal rule
@@ -27,7 +25,9 @@ final class RuleCell: NSTextAttachmentCell {
     ) -> NSRect {
         let font = Theme.font
         let height = ceil(font.ascender - font.descender + font.leading)
-        return NSRect(x: 0, y: floor(font.descender), width: usableLineWidth(lineFrag, textContainer) - Theme.textRightMargin, height: height)
+        // From after the line-number gutter to the right text margin, like text lines.
+        let width = containerLineWidth(textContainer) - Theme.gutterWidth - Theme.textRightMargin
+        return NSRect(x: 0, y: floor(font.descender), width: max(1, width), height: height)
     }
 
     override func cellSize() -> NSSize { NSSize(width: 100, height: 15) }
@@ -105,29 +105,48 @@ final class ImageCell: NSTextAttachmentCell {
         for textContainer: NSTextContainer, proposedLineFragment lineFrag: NSRect,
         glyphPosition position: NSPoint, characterIndex charIndex: Int
     ) -> NSRect {
-        guard let me = attachment as? ImageAttachment,
-              let storage = textContainer.layoutManager?.textStorage
+        guard let storage = textContainer.layoutManager?.textStorage
         else { return NSRect(origin: .zero, size: cellSize()) }
 
-        let row = Self.row(in: storage, at: charIndex)
-        let available = usableLineWidth(lineFrag, textContainer) - Theme.imageGap * CGFloat(max(row.count - 1, 0))
-        let height = max(1, floor(available / max(row.aspects, 0.01)))
-        // Every image but the last carries the gap to its right inside its own cell.
-        let gap = charIndex == row.lastIndex ? 0 : Theme.imageGap
-        return NSRect(x: 0, y: 0, width: floor(height * me.aspect) + gap, height: height)
+        let widths = Self.rowWidths(in: storage, at: charIndex, container: textContainer)
+        guard let mine = widths.first(where: { $0.index == charIndex }) else {
+            return NSRect(origin: .zero, size: cellSize())
+        }
+        return NSRect(x: 0, y: 0, width: mine.width + mine.gap, height: mine.height)
     }
 
-    private static func row(in storage: NSTextStorage, at charIndex: Int) -> (count: Int, aspects: CGFloat, lastIndex: Int) {
+    /// Lays out the row: one common height, widths by aspect ratio, and the last image takes
+    /// whatever is left so the row ends exactly at the right inset (no rounding gap).
+    /// Each image except the last carries the gap to its right inside its own cell.
+    static func rowWidths(in storage: NSTextStorage, at charIndex: Int, container: NSTextContainer)
+        -> [(index: Int, width: CGFloat, gap: CGFloat, height: CGFloat)] {
         let line = (storage.string as NSString).paragraphRange(for: NSRange(location: charIndex, length: 0))
-        var aspects: CGFloat = 0, count = 0, last = charIndex
+        var items: [(index: Int, aspect: CGFloat)] = []
         storage.enumerateAttribute(.attachment, in: line) { value, r, _ in
             if let img = value as? ImageAttachment {
-                aspects += img.aspect * CGFloat(r.length)
-                count += r.length
-                last = NSMaxRange(r) - 1
+                for k in 0..<r.length { items.append((r.location + k, img.aspect)) }
             }
         }
-        return (count, aspects, last)
+        guard !items.isEmpty else { return [] }
+        let gaps = Theme.imageGap * CGFloat(items.count - 1)
+        let rowWidth = containerLineWidth(container) - 2 * Theme.imageSideInset - gaps
+        let height = max(1, floor(rowWidth / max(items.reduce(0) { $0 + $1.aspect }, 0.01)))
+        var used: CGFloat = 0
+        return items.enumerated().map { i, item in
+            let isLast = i == items.count - 1
+            let width = isLast ? max(1, rowWidth - used) : floor(height * item.aspect)
+            used += width
+            return (item.index, width, isLast ? 0 : Theme.imageGap, height)
+        }
+    }
+
+    private static func isLastInRow(_ storage: NSTextStorage, _ charIndex: Int) -> Bool {
+        let line = (storage.string as NSString).paragraphRange(for: NSRange(location: charIndex, length: 0))
+        var last = charIndex
+        storage.enumerateAttribute(.attachment, in: line) { value, r, _ in
+            if value is ImageAttachment { last = NSMaxRange(r) - 1 }
+        }
+        return last == charIndex
     }
 
     override func cellSize() -> NSSize { NSSize(width: 100, height: 75) }
@@ -143,7 +162,7 @@ final class ImageCell: NSTextAttachmentCell {
         characterIndex charIndex: Int, layoutManager: NSLayoutManager
     ) {
         var frame = cellFrame
-        if let storage = layoutManager.textStorage, charIndex != Self.row(in: storage, at: charIndex).lastIndex {
+        if let storage = layoutManager.textStorage, !Self.isLastInRow(storage, charIndex) {
             frame.size.width -= Theme.imageGap
         }
         drawImage(in: frame, controlView: controlView, characterIndex: charIndex)
