@@ -11,8 +11,6 @@ final class PanelController: NSObject {
     private let resizeHandle = ResizeHandle()
     private let closeStrip = CloseStrip()
     private let hotKey = GlobalHotKey()
-    /// While the panel is visible: hides it if Mission Control opens.
-    private var overlayWatchTimer: Timer?
 
     /// 0 = fully hidden, 1 = fully shown.
     private var progress: CGFloat = 0
@@ -27,8 +25,6 @@ final class PanelController: NSObject {
     /// False right after a forced close while the cursor may be on the edge; re-armed once
     /// the cursor leaves the edge.
     private var edgeTriggerArmed = true
-    /// A pinned panel hidden because Mission Control opened; shown again when it closes.
-    private var hiddenForOverlay = false
     /// Start of an ⌥-drag resize: mouse location and panel depth at mouse-down.
     private var optionResize: (point: NSPoint, depth: CGFloat)?
     /// A mouse button went down inside the panel and is still held.
@@ -36,11 +32,6 @@ final class PanelController: NSObject {
     /// Polls the mouse while a button is held: during drag sessions (e.g. dragging a file
     /// from Finder) mouse events don't reach our monitors.
     private var pressPollTimer: Timer?
-    /// App that was active before the panel took focus.
-    /// Most recently active app other than peek, to hand focus back to.
-    private var lastOtherApp: NSRunningApplication?
-    /// The panel got keyboard focus from a click and should give it back.
-    private var focusedByClick = false
 
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -57,7 +48,6 @@ final class PanelController: NSObject {
         setUpContent()
         installMonitors()
         observeSettings()
-        observeActivation()
 
         hotKey.onPress = { [weak self] in self?.hotKeyPressed() }
         hotKey.register(settings.shortcut(for: .pin))
@@ -270,17 +260,13 @@ final class PanelController: NSObject {
                 if !atEdge { edgeTriggerArmed = true }
                 return
             }
-            if atEdge && !hiddenForOverlay && !SystemState.isMissionControlActive() { show() }
+            if atEdge { show() }
             return
         }
 
         if pressBeganInside && buttonsDown { return }  // e.g. selecting text or resizing
 
-        if isInsideKeepArea(loc, of: screen) {
-            return
-        } else if isPinned {
-            if focusedByClick { returnFocus() }
-        } else {
+        if !isPinned && !isInsideKeepArea(loc, of: screen) {
             hide()
         }
     }
@@ -317,43 +303,10 @@ final class PanelController: NSObject {
 
     // MARK: Focus
 
-    /// The panel only takes keyboard focus when clicked. Clicking activates peek like any
-    /// app (input methods such as Korean need the active app); when the panel closes or the
-    /// mouse leaves a pinned panel, activation goes back to the app used before.
-    private func observeActivation() {
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
-        ) { [weak self] note in
-            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            MainActor.assumeIsolated {
-                if let app, app != NSRunningApplication.current { self?.lastOtherApp = app }
-            }
-        }
-    }
-
-    /// Clicking the panel focuses it and pins it, so it stays while you work elsewhere.
+    /// Clicking the panel focuses it (peek becomes the active app, as with any window) and
+    /// pins it. Focus never moves because of mouse movement.
     private func panelClicked() {
-        focusedByClick = true
         isPinned = true
-    }
-
-    /// Give keyboard focus back to the previously active app (the panel may stay on screen).
-    private func returnFocus() {
-        DebugLog.log("returnFocus focusedByClick=\(focusedByClick) \(DebugLog.state)")
-        guard focusedByClick else { return }
-        focusedByClick = false
-        // Don't leave a half-composed syllable behind; the input method would otherwise
-        // commit it later at an odd moment.
-        editor.textView.commitComposition()
-        guard NSApp.isActive else { return }
-        if let other = NSApp.windows.first(where: { $0 !== panel && $0.isVisible && $0.canBecomeKey }) {
-            other.makeKeyAndOrderFront(nil)  // e.g. the settings window stays in charge
-        } else if let app = lastOtherApp, !app.isTerminated {
-            NSApp.yieldActivation(to: app)
-            app.activate(from: NSRunningApplication.current, options: [])
-        } else {
-            NSApp.deactivate()
-        }
     }
 
     // MARK: Show / hide
@@ -364,52 +317,23 @@ final class PanelController: NSObject {
             applyFrame()
             panel.orderFrontRegardless()
         }
-        startOverlayWatch()
         animate(to: 1)
-    }
-
-    /// Mission Control gives no notification; while visible, check a few times a second.
-    private func startOverlayWatch() {
-        guard overlayWatchTimer == nil else { return }
-        let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.checkOverlay() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        overlayWatchTimer = timer
-    }
-
-    /// Mission Control: a pinned panel hides and comes back afterwards; an unpinned one just hides.
-    private func checkOverlay() {
-        let overlay = SystemState.isMissionControlActive()
-        if hiddenForOverlay {
-            guard !overlay else { return }
-            hiddenForOverlay = false
-            show()
-        } else if overlay {
-            hiddenForOverlay = isPinned
-            hideImmediately(keepWatching: isPinned)
-        }
-    }
-
-    private func stopOverlayWatch() {
-        overlayWatchTimer?.invalidate()
-        overlayWatchTimer = nil
     }
 
     func hide() {
         guard target != 0 else { return }
-        returnFocus()
+        // Don't leave a half-composed syllable behind.
+        editor.textView.commitComposition()
         animate(to: 0)
     }
 
-    private func hideImmediately(keepWatching: Bool = false) {
+    private func hideImmediately() {
         animTimer?.invalidate()
         animTimer = nil
         target = 0
         progress = 0
-        returnFocus()
+        editor.textView.commitComposition()
         panel.orderOut(nil)
-        if !keepWatching { stopOverlayWatch() }
         editor.saveNow()
     }
 
@@ -421,7 +345,6 @@ final class PanelController: NSObject {
     /// Global hotkey: open + pin without taking focus. When pinned: unpin and fade out even
     /// if the mouse is over the panel. When open but not pinned: pin.
     func hotKeyPressed() {
-        hiddenForOverlay = false
         if target == 0 {
             isPinned = true
             show()
@@ -482,7 +405,6 @@ final class PanelController: NSObject {
     private func finishAnimation() {
         if target == 0 {
             panel.orderOut(nil)
-            if !hiddenForOverlay { stopOverlayWatch() }
             editor.saveNow()
         }
     }
@@ -571,7 +493,6 @@ final class PanelController: NSObject {
     // MARK: Changes
 
     private func edgeChanged() {
-        hiddenForOverlay = false
         liveDepth = nil
         depthBeforeFill = nil
         hideImmediately()

@@ -52,6 +52,7 @@ enum SelfTest {
         koreanComposition()
         lineMetrics()
         koreanMidLine()
+        clickLines()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -335,6 +336,34 @@ enum SelfTest {
         tv.insertText("글", replacementRange: nf)
         let expected = (long as NSString).replacingCharacters(in: NSRange(location: mid, length: 0), with: "한글")
         check("hangul typed mid long line stays in place", tv, expected)
+    }
+
+    /// Clicking in the middle of line N must put the caret on line N.
+    private static func clickLines() {
+        for doc in ["aa\nbb\ncc", "aa\nbb\n", "한글\n굵게\n셋째", "aa\n\n", "https://www.playful-dc.com/en/ko\n\n"] {
+            let tv = makeView(doc)
+            let lm = tv.layoutManager!
+            lm.ensureLayout(for: tv.textContainer!)
+            let h = Theme.lineMetrics.height
+            let ns = doc as NSString
+            for line in 0..<3 {
+                // Lines can wrap: use the actual fragment of each logical line.
+                let starts = [0] + ns.components(separatedBy: "\n").dropLast().reduce(into: [Int]()) { acc, part in
+                    acc.append((acc.last ?? 0) + (part as NSString).length + 1) }
+                let start = starts[line]
+                let frag = start < ns.length ? lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: start), effectiveRange: nil) : lm.extraLineFragmentRect
+                _ = h
+                let y = tv.textContainerOrigin.y + frag.midY
+                let idx = tv.characterIndexForInsertion(at: NSPoint(x: 6, y: y))
+                let lineOfIdx = ns.substring(to: min(idx, ns.length)).filter { $0 == "\n" }.count
+                expect("click line \(line + 1) of \(doc.debugDescription) → line \(lineOfIdx + 1) (idx \(idx))", lineOfIdx == line)
+                tv.setSelectedRange(NSRange(location: idx, length: 0))
+                let caret = tv.firstRect(forCharacterRange: NSRange(location: idx, length: 0), actualRange: nil)
+                let caretInView = tv.window!.convertFromScreen(caret)
+                let local = tv.convert(caretInView, from: nil)
+                if doc.hasSuffix("\n\n") { print("       line \(line + 1): fragY=\(frag.minY)..\(frag.maxY) caretY=\(local.minY)..\(local.maxY) extra=\(lm.extraLineFragmentRect)") }
+            }
+        }
     }
 
     private static func undo() {

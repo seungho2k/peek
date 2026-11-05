@@ -32,15 +32,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                 report("shown")
-                if ProcessInfo.processInfo.environment["PEEK_MC_TEST"] != nil {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Mission Control.app"))
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        report("during mission control")
-                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Mission Control.app"))
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { report("after mission control"); exit(0) }
-                    }
-                    return
-                }
                 self.panelController.hide()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                     report("hidden")

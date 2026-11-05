@@ -453,6 +453,23 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     }
 
     /// Finishes an in-progress IME composition (e.g. a Korean syllable) as typed.
+    override func mouseDown(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        DebugLog.log("mouseDown at \(p) → index \(characterIndexForInsertion(at: p)) sel=\(selectedRange()) key=\(window?.isKeyWindow ?? false) active=\(NSApp.isActive)")
+        super.mouseDown(with: event)
+        DebugLog.log("mouseDown done sel=\(selectedRange())")
+    }
+
+    override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        #if DEBUG
+        if !stillSelecting {
+            let callers = Thread.callStackSymbols.dropFirst(1).prefix(6).map { $0.split(separator: " ").dropFirst(3).prefix(1).joined() }
+            DebugLog.log("selection → \(selectedRange()) via \(callers.joined(separator: " < "))")
+        }
+        #endif
+    }
+
     override func unmarkText() {
         DebugLog.log("unmarkText")
         super.unmarkText()
