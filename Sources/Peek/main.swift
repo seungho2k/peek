@@ -1,6 +1,10 @@
 import AppKit
 
 MainActor.assumeIsolated {
+    #if DEBUG
+    if CommandLine.arguments.contains("--selftest") { SelfTest.run() }
+    #endif
+
     let app = NSApplication.shared
     let delegate = AppDelegate()
     app.delegate = delegate
