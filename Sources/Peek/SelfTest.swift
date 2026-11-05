@@ -244,6 +244,11 @@ enum SelfTest {
         expect("row on one line", abs(r0.minY - r1.minY) < 1)
         expect("row fills width", r1.maxX - r0.minX > usable - 4 && r1.maxX - r0.minX <= usable + 1)
         expect("aspect kept", abs(r0.width / r1.width - 2) < 0.1)
+        let origin = layout.textContainerOrigin
+        let hit1 = layout.imageAttachment(at: NSPoint(x: r1.midX + origin.x, y: r1.midY + origin.y))
+        expect("double-click hit finds the second image", hit1?.name == names[1])
+        expect("no image hit in empty space", layout.imageAttachment(at: NSPoint(x: 5, y: r0.maxY + 40)) == nil)
+        expect("quick look items in note order", layout.noteImageURLs.map(\.lastPathComponent) == names)
         for name in names { try? FileManager.default.removeItem(at: NoteStore.shared.imageURL(named: name)) }
 
         let mixed = makeView("ab")

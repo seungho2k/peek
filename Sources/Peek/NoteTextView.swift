@@ -1,4 +1,5 @@
 import AppKit
+import Quartz
 
 /// The note editor. Content is a sequence of lines; each line is plain text (optionally
 /// bold as a whole), a horizontal rule, or a row of images. Rule/image lines ("block
@@ -6,6 +7,10 @@ import AppKit
 final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDelegate {
     var onOpenSettings: (() -> Void)?
     var onToggleFill: (() -> Void)?
+
+    /// Quick Look state (see NoteTextView+QuickLook).
+    var previewURLs: [URL] = []
+    var previewStartIndex = 0
 
     /// Character range edited since the last block normalization pass.
     private var pendingNormalizeRange: NSRange?
@@ -479,6 +484,10 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     override func mouseDown(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
         DebugLog.log("mouseDown at \(p) → index \(characterIndexForInsertion(at: p)) sel=\(selectedRange()) key=\(window?.isKeyWindow ?? false) active=\(NSApp.isActive)")
+        if event.clickCount == 2, let image = imageAttachment(at: p) {
+            showQuickLook(startingAt: image)
+            return
+        }
         super.mouseDown(with: event)
         DebugLog.log("mouseDown done sel=\(selectedRange())")
     }
