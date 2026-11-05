@@ -43,6 +43,8 @@ final class Settings: ObservableObject {
     private let defaults = UserDefaults.standard
 
     static let defaultSideWidth: CGFloat = 360
+    /// min-width can't go below this.
+    static let minimumWidthFloor: Double = 80
 
     @Published var edge: PeekEdge {
         didSet { defaults.set(edge.rawValue, forKey: "edge") }
@@ -82,7 +84,7 @@ final class Settings: ObservableObject {
         slideInMs = defaults.object(forKey: "slideInMs") as? Double ?? 150
         slideOutMs = defaults.object(forKey: "slideOutMs") as? Double ?? 120
         defaults.removeObject(forKey: "hideMargin")  // setting removed
-        minDepth = defaults.object(forKey: "minDepth") as? Double ?? 200
+        minDepth = max(defaults.object(forKey: "minDepth") as? Double ?? 200, Self.minimumWidthFloor)
         defaults.removeObject(forKey: "ruleStyle")  // setting removed (full-width rules)
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
         defaults.removeObject(forKey: "bottomHeight")  // bottom edge removed

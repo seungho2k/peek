@@ -20,21 +20,20 @@ enum SettingsText {
         ("toggle", .pin), ("bold", .bold), ("rule", .rule), ("fill", .fill), ("settings", .settings),
     ]
 
+    /// Related settings share a block (rule-separated); items in a block are separated by a
+    /// blank line, each as a key line followed by its value line.
     static func format(_ s: Settings) -> String {
-        var sections: [(String, String)] = [
-            ("edge", s.edge.rawValue),
-            ("min-width", "\(Int(s.minDepth))"),
-            ("fade-in", "\(Int(s.slideInMs))"),
-            ("fade-out", "\(Int(s.slideOutMs))"),
-            ("launch-at-login", s.launchAtLogin ? "on" : "off"),
-            ("bold-first-line", s.autoBoldFirstLine ? "on" : "off"),
+        let blocks: [[(String, String)]] = [
+            [("edge", s.edge.rawValue), ("min-width", "\(Int(s.minDepth))")],
+            [("fade-in", "\(Int(s.slideInMs))"), ("fade-out", "\(Int(s.slideOutMs))")],
+            [("launch-at-login", s.launchAtLogin ? "on" : "off"),
+             ("bold-first-line", s.autoBoldFirstLine ? "on" : "off")],
+            shortcutKeys.map { ($0.key, ShortcutText.format(s.shortcut(for: $0.action))) },
         ]
-        for (key, action) in shortcutKeys {
-            sections.append((key, ShortcutText.format(s.shortcut(for: action))))
-        }
-        // Line 00 of each section is bold when bold-first-line is on, as if typed in the note.
+        // Keys are bold when bold-first-line is on, like headings typed in the note.
         let b = { (t: String) in s.autoBoldFirstLine ? "**\(t)**" : t }
-        return ([b(title)] + sections.map { "\(b($0.0))\n\($0.1)" }).joined(separator: "\n---\n")
+        let body = blocks.map { block in block.map { "\(b($0.0))\n\($0.1)" }.joined(separator: "\n\n") }
+        return ([b(title)] + body).joined(separator: "\n---\n")
     }
 
     enum Change: Equatable {
@@ -50,16 +49,26 @@ enum SettingsText {
     /// Parses the sections; `invalid` holds indices of lines that couldn't be applied
     /// (unknown key, missing/bad value, or a shortcut used twice).
     static func parse(_ text: String) -> (changes: [Change], invalid: Set<Int>) {
+        // Items: runs of non-empty lines, split by blank lines and rules. The first block
+        // (everything before the first rule) is the title and isn't parsed.
         let lines = text.components(separatedBy: "\n")
-        var sections: [[(index: Int, text: String)]] = [[]]
+        var sections: [[(index: Int, text: String)]] = []
+        var current: [(index: Int, text: String)] = []
+        var inTitle = true
+        func flush() {
+            if !current.isEmpty && !inTitle { sections.append(current) }
+            current = []
+        }
         for (i, raw) in lines.enumerated() {
             let line = raw.trimmingCharacters(in: .whitespaces)
-            if line == "---" { sections.append([]); continue }
-            if line.isEmpty { continue }
-            // A line made bold by hand is saved as **…**; read the text inside.
+            if line == "---" { flush(); inTitle = false; continue }
+            if line.isEmpty { flush(); continue }
+            // A bold line is saved as **…**; read the text inside.
             let plain = line.count >= 4 && line.hasPrefix("**") && line.hasSuffix("**") ? String(line.dropFirst(2).dropLast(2)) : line
-            sections[sections.count - 1].append((i, plain))
+            current.append((i, plain))
         }
+        flush()
+        sections.insert([], at: 0)  // keeps the loop below skipping index 0
 
         var changes: [(line: Int, change: Change)] = []
         var invalid: Set<Int> = []
@@ -97,8 +106,8 @@ enum SettingsText {
         case "edge":
             return PeekEdge(rawValue: value).map { .ok(.edge($0)) } ?? .badValue
         case "min-width":
-            guard let n = Double(value), (100...3000).contains(n) else { return .badValue }
-            return .ok(.minWidth(n))
+            guard let n = Double(value), n >= 0, n <= 3000 else { return .badValue }
+            return .ok(.minWidth(max(n, Settings.minimumWidthFloor)))  // below 80 becomes 80
         case "fade-in", "fade-out":
             guard let n = Double(value), (0...5000).contains(n) else { return .badValue }
             return .ok(key == "fade-in" ? .fadeIn(n) : .fadeOut(n))

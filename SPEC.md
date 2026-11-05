@@ -168,25 +168,28 @@ peek는 화면 가장자리에 붙는 **단 하나의 노트**다.
 
 설정 창은 없다. ⌘,(또는 peek를 한 번 더 실행)를 누르면 노트 안쪽 옆(오른쪽 노트면 왼쪽)에 **텍스트 설정 패널**이 화면 위아래로 꽉 차게 붙어 뜬다. 노트가 닫혀 있으면 함께 연다.
 
-- 노트와 같은 에디터라서 줄 번호, 수평선, 00줄 굵게가 똑같이 적용된다. 항목마다 수평선으로 나뉜 구역 하나: 00줄은 이름, 01줄은 값.
+- 노트와 같은 에디터라서 줄 번호, 수평선, 00줄 굵게가 똑같이 적용된다. 비슷한 설정끼리 한 블럭(수평선으로 구분)에 묶고, 블럭 안에서는 빈 줄로 항목을 나눈다. 항목은 이름 줄 다음 값 줄.
 
 ```
 00 preferences
 ---
 00 edge
 01 right
+02
+03 min-width
+04 200
 ---
-00 min-width
-01 200
+00 fade-in          (ms, 0–5000)
+…  fade-out
 ---
-00 fade-in        (ms, 0–5000)
-00 fade-out       (ms, 0–5000)
-00 launch-at-login (on/off)
-00 bold-first-line (on/off)
-00 toggle / bold / rule / fill / settings   (단축키: cmd/opt/ctrl/shift + 키, 예: opt+space, cmd+enter)
+00 launch-at-login  (on/off)
+…  bold-first-line  (on/off)
+---
+00 toggle           (단축키: cmd/opt/ctrl/shift + 키, 예: opt+space, cmd+enter)
+…  bold / rule / fill / settings
 ```
 
-- 폭은 내용에 맞는 최소 폭. 노트 옆에 그만큼 공간이 없으면 노트를 모자란 폭만큼만 줄이고(예: 노트 1920pt, 설정 100pt → 노트 1820pt) 그 자리에 띄운다. 설정을 닫으면 노트 폭이 돌아온다.
+- 패널 폭은 항상 `min-width`. `min-width`에 80보다 작은 값을 넣으면 80으로 적용. 노트 옆에 그만큼 공간이 없으면 노트를 모자란 폭만큼만 줄이고(예: 노트 1920pt, min-width 100 → 노트 1820pt) 그 자리에 띄운다. 설정을 닫으면 노트 폭이 돌아온다.
 - 입력하는 즉시 반영. 적용할 수 없는 줄(모르는 이름, 잘못되거나 빠진 값, 다른 항목과 겹치는 단축키)은 빨간색.
 - ⌘, 또는 Esc로 닫는다. 노트를 닫으면 같이 닫힌다. 종료는 노트에서 ⌘Q.
 - 값은 UserDefaults에 저장.

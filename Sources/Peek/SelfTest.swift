@@ -413,7 +413,7 @@ enum SelfTest {
     private static func settingsText() {
         let formatted = SettingsText.format(Settings.shared)
         let (changes, invalid) = SettingsText.parse(formatted)
-        expect("formatted settings parse cleanly", invalid.isEmpty && changes.count == formatted.components(separatedBy: "\n---\n").count - 1)
+        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 11)
 
         for (text, code, mods) in [("cmd+-", KeyCode.minus, NSEvent.ModifierFlags.command),
                                    ("opt+space", KeyCode.space, .option),
@@ -425,12 +425,12 @@ enum SelfTest {
             if let sc { expect("format \(text)", ShortcutText.format(sc) == text) }
         }
 
-        let sample = "preferences\n---\nedge\nmiddle\n---\nmin-width\nabc\n---\nfoo\nbar\n---\nbold\nb\n---\nfade-in\n90\n---\nrule\ncmd+k\n---\nfill\ncmd+k\n---\nfade-out"
+        let sample = "preferences\n---\nedge\nmiddle\n\nmin-width\n50\n---\nfoo\nbar\n\nbold\nb\n\nfade-in\n90\n---\nrule\ncmd+k\n\nfill\ncmd+k\n\nfade-out"
         let bad = SettingsText.parse(sample)
-        // lines: 0 preferences, 2 edge, 3 middle, 5 min-width, 6 abc, 8 foo, 9 bar, 11 bold, 12 b,
-        // 14 fade-in, 15 90, 17 rule, 18 cmd+k, 20 fill, 21 cmd+k, 23 fade-out (no value)
-        expect("bad lines flagged (\(bad.invalid.sorted()))", bad.invalid == [3, 6, 8, 12, 18, 21, 23])
-        expect("good line applied", bad.changes == [.fadeIn(90)])
+        // lines: 0 preferences | 2 edge 3 middle, 5 min-width 6 50 | 8 foo 9 bar, 11 bold 12 b,
+        // 14 fade-in 15 90 | 17 rule 18 cmd+k, 20 fill 21 cmd+k, 23 fade-out (no value)
+        expect("bad lines flagged (\(bad.invalid.sorted()))", bad.invalid == [3, 8, 12, 18, 21, 23])
+        expect("good lines applied; min-width below 80 becomes 80", bad.changes == [.minWidth(80), .fadeIn(90)])
     }
 
     private static func autoBold() {

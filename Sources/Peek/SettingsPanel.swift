@@ -12,8 +12,6 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
 
     /// Close request (⌘, or Esc).
     var onClose: (() -> Void)?
-    /// The text changed width (e.g. a longer value); the owner re-docks the panel.
-    var onWidthChange: (() -> Void)?
 
     var isVisible: Bool { panel.isVisible }
 
@@ -53,14 +51,6 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
         markInvalid([])
     }
 
-    /// Width that fits the longest line (plus gutter and margin).
-    var preferredWidth: CGFloat {
-        let widest = textView.string.components(separatedBy: "\n")
-            .map { ($0 as NSString).size(withAttributes: [.font: Theme.boldFont]).width }
-            .max() ?? 0
-        return ceil(Theme.gutterWidth + widest + Theme.textRightMargin + 8)
-    }
-
     func setFrame(_ frame: NSRect) {
         panel.setFrame(frame, display: true)
         scrollView.frame = NSRect(origin: .zero, size: frame.size)
@@ -80,11 +70,9 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
     }
 
     func textDidChange(_ notification: Notification) {
-        let oldWidth = panel.frame.width
         let (changes, invalid) = SettingsText.parse(textView.markdown())
         SettingsText.apply(changes, to: settings)
         markInvalid(invalid)
-        if preferredWidth != oldWidth { onWidthChange?() }
     }
 
     /// Red for lines that couldn't be applied (layout-only attribute, not part of the text).
@@ -111,7 +99,7 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
         let valueEnd = ("preferences\n-\nedge\nright" as NSString).length
         textView.setSelectedRange(NSRange(location: valueEnd, length: 0))
         textView.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
-        let size = NSSize(width: preferredWidth, height: 420)
+        let size = NSSize(width: CGFloat(settings.minDepth), height: 520)
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView = scrollView
         scrollView.frame = NSRect(origin: .zero, size: size)

@@ -47,7 +47,6 @@ final class PanelController: NSObject {
         hotKey.register(settings.shortcut(for: .pin))
         editor.textView.onOpenSettings = { [weak self] in self?.toggleSettings() }
         settingsPanel.onClose = { [weak self] in self?.hideSettings() }
-        settingsPanel.onWidthChange = { [weak self] in self?.layoutSettings() }
         editor.textView.onToggleFill = { [weak self] in self?.toggleFill() }
 
         #if DEBUG
@@ -109,7 +108,10 @@ final class PanelController: NSObject {
             DispatchQueue.main.async { NoteFormat.autoBoldFirstLine = on }
         }.store(in: &cancellables)
         settings.$minDepth.dropFirst().sink { [weak self] _ in
-            DispatchQueue.main.async { self?.applyFrame() }
+            DispatchQueue.main.async {
+                self?.applyFrame()
+                if self?.settingsPanel.isVisible == true { self?.layoutSettings() }
+            }
         }.store(in: &cancellables)
         settings.$edge.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async { self?.edgeChanged() }
@@ -222,7 +224,7 @@ final class PanelController: NSObject {
         isLayingOutSettings = true
         defer { isLayingOutSettings = false }
         let vf = screen.visibleFrame
-        let width = min(settingsPanel.preferredWidth, vf.width)
+        let width = min(CGFloat(settings.minDepth), vf.width)  // settings are always min-width wide
         var note = panel.frame
         let room = settings.edge == .right ? note.minX - vf.minX : vf.maxX - note.maxX
         if room < width && !shrunkForSettings && liveDepth == nil {
