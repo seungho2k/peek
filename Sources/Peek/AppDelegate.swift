@@ -32,8 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 report("shown")
                 for w in NSApp.windows where w.isVisible { print("window \(type(of: w)) \(w.frame) alpha=\(w.alphaValue) ignoresMouse=\(w.ignoresMouseEvents)") }
                 if ProcessInfo.processInfo.environment["PEEK_SETTINGS_TOGGLE_PROBE"] != nil {
-                    let pc = self.panelController!, sp = pc.settingsPanel.panel
-                    func state(_ l: String) { print("\(l): note=\(pc.panel.isVisible)/\(String(format: "%.2f", pc.panel.alphaValue)) settings=\(sp.isVisible)/\(String(format: "%.2f", sp.alphaValue))") }
+                    let pc = self.panelController!
+                    @MainActor func state(_ l: String) { print("\(l): panel=\(pc.panel.isVisible)/\(String(format: "%.2f", pc.panel.alphaValue)) settingsOpen=\(pc.settingsOpen)") }
                     pc.showSettings(); state("settings opened")
                     pc.hotKeyPressed()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { state("mid fade-out")
@@ -48,11 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 if ProcessInfo.processInfo.environment["PEEK_SETTINGS_PROBE"] != nil {
                     self.panelController.showSettings()
-                    let sp = self.panelController.settingsPanel.panel
-                    print("settings: note=\(self.panelController.panel.frame) settings=\(sp.frame) visible=\(sp.isVisible) key=\(sp.isKeyWindow)")
-                    for w in NSApp.windows where w.isVisible { print("  open: \(type(of: w)) \(w.frame)") }
+                    print("settings: panel=\(self.panelController.panel.frame) settingsOpen=\(self.panelController.settingsOpen)")
                     self.panelController.hideSettings()
-                    print("settings closed: note=\(self.panelController.panel.frame)")
+                    print("settings closed: settingsOpen=\(self.panelController.settingsOpen)")
                 }
                 self.panelController.hide()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {

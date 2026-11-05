@@ -1,19 +1,16 @@
 import AppKit
 
-/// Text-based settings, shown in a full-height panel docked beside the note. It uses the note's
-/// own text view, so it has the same line numbers, rules and section bolding. Edits apply as
-/// you type; lines that can't be applied turn red. ⌘, or Esc closes it.
+/// Text-based settings, shown inside the note panel in place of the note (same width, same
+/// text view, so the same line numbers, rules and bolding). Edits apply as you type; lines that
+/// can't be applied turn red. ⌘, or Esc goes back to the note.
 @MainActor
-final class SettingsPanelController: NSObject, NSTextViewDelegate {
-    let panel = PeekPanel()
-    private let scrollView = NSScrollView()
+final class SettingsEditor: NSObject, NSTextViewDelegate {
+    let scrollView = NSScrollView()
     let textView: NoteTextView
     private let settings = Settings.shared
 
     /// Close request (⌘, or Esc).
     var onClose: (() -> Void)?
-
-    var isVisible: Bool { panel.isVisible }
 
     override init() {
         let storage = NSTextStorage()
@@ -39,9 +36,7 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         scrollView.autoresizingMask = [.width, .height]
-        let content = NSView()
-        content.addSubview(scrollView)
-        panel.contentView = content
+        scrollView.isHidden = true
     }
 
     /// Fills the panel with the current settings.
@@ -49,23 +44,6 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
         textView.load(markdown: SettingsText.format(settings))
         textView.setSelectedRange(NSRange(location: 0, length: 0))
         markInvalid([])
-    }
-
-    func setFrame(_ frame: NSRect) {
-        panel.setFrame(frame, display: true)
-        scrollView.frame = NSRect(origin: .zero, size: frame.size)
-    }
-
-    /// Shows it and gives it keyboard focus.
-    func present() {
-        NSApp.activate()
-        panel.makeKeyAndOrderFront(nil)
-        panel.makeFirstResponder(textView)
-    }
-
-    func hide() {
-        textView.commitComposition()
-        panel.orderOut(nil)
     }
 
     func textDidChange(_ notification: Notification) {
@@ -91,16 +69,15 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
     }
 
     #if DEBUG
-    /// Draws the panel content (with one invalid value) for visual checks.
-    func debugRender(to path: String) {
+    /// Draws the settings (with one invalid value) for visual checks.
+    func debugRender(to path: String, width: CGFloat) {
         load()
-        // Make the edge value invalid.
         let edgeValue = (textView.string as NSString).range(of: "edge: " + settings.edge.rawValue)
-        let valueEnd = NSMaxRange(edgeValue)
-        textView.setSelectedRange(NSRange(location: valueEnd, length: 0))
+        textView.setSelectedRange(NSRange(location: NSMaxRange(edgeValue), length: 0))
         textView.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
-        let size = NSSize(width: CGFloat(settings.minDepth), height: 520)
+        let size = NSSize(width: width, height: 420)
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
+        scrollView.isHidden = false
         window.contentView = scrollView
         scrollView.frame = NSRect(origin: .zero, size: size)
         textView.layoutManager?.ensureLayout(for: textView.textContainer!)

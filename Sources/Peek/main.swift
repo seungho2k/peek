@@ -11,7 +11,7 @@ MainActor.assumeIsolated {
         _ = NSApplication.shared
         DebugLog.enabled = false
         NoteFormat.autoBoldFirstLine = Settings.shared.autoBoldFirstLine
-        SettingsPanelController().debugRender(to: CommandLine.arguments[i + 1])
+        SettingsEditor().debugRender(to: CommandLine.arguments[i + 1], width: 260)
         exit(0)
     }
     if let i = CommandLine.arguments.firstIndex(of: "--render"), i + 1 < CommandLine.arguments.count {

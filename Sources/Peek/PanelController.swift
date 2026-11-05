@@ -26,12 +26,9 @@ final class PanelController: NSObject {
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
 
-    let settingsPanel = SettingsPanelController()
-    /// The note was narrowed to make room for the settings panel.
-    private var shrunkForSettings = false
-    /// The settings are open (they fade out and back in with the note).
-    private var settingsOpen = false
-    private var isLayingOutSettings = false
+    let settingsEditor = SettingsEditor()
+    /// The panel is showing the settings instead of the note.
+    private(set) var settingsOpen = false
 
     private static let handleThickness: CGFloat = 5
     /// ⌥-drag resize moves the edge this many times faster than the mouse.
@@ -48,7 +45,7 @@ final class PanelController: NSObject {
         hotKey.onPress = { [weak self] in self?.hotKeyPressed() }
         hotKey.register(settings.shortcut(for: .pin))
         editor.textView.onOpenSettings = { [weak self] in self?.toggleSettings() }
-        settingsPanel.onClose = { [weak self] in self?.hideSettings() }
+        settingsEditor.onClose = { [weak self] in self?.hideSettings() }
         editor.textView.onToggleFill = { [weak self] in self?.toggleFill() }
 
         #if DEBUG
@@ -73,6 +70,8 @@ final class PanelController: NSObject {
         editor.scrollView.translatesAutoresizingMaskIntoConstraints = true
         editor.scrollView.autoresizingMask = [.width, .height]
         content.addSubview(editor.scrollView)
+        settingsEditor.scrollView.translatesAutoresizingMaskIntoConstraints = true
+        content.addSubview(settingsEditor.scrollView)
 
         resizeHandle.onDrag = { [weak self] point in self?.resize(to: point) }
         resizeHandle.onDragEnded = { [weak self] in self?.commitLiveDepth() }
@@ -90,6 +89,7 @@ final class PanelController: NSObject {
         let b = content.bounds
 
         editor.scrollView.frame = b
+        settingsEditor.scrollView.frame = b
         switch settings.edge {
         case .right:
             resizeHandle.frame = NSRect(x: 0, y: 0, width: t, height: b.height)
@@ -112,7 +112,6 @@ final class PanelController: NSObject {
         settings.$minDepth.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async {
                 self?.applyFrame()
-                if self?.settingsOpen == true { self?.layoutSettings() }
             }
         }.store(in: &cancellables)
         settings.$edge.dropFirst().sink { [weak self] _ in
@@ -181,10 +180,8 @@ final class PanelController: NSObject {
         if newFrame != panel.frame {
             panel.setFrame(newFrame, display: true)
             layoutContent()
-            if settingsOpen { layoutSettings() }
         }
         panel.alphaValue = progress
-        if settingsOpen { settingsPanel.panel.alphaValue = progress }  // fades with the note
     }
 
     // MARK: Show / hide
@@ -194,66 +191,45 @@ final class PanelController: NSObject {
             if NoteStore.shared.hasExternalChange() { editor.reload() }
             applyFrame()
             panel.orderFrontRegardless()
-            if settingsOpen {
-                // Settings that were open when the note was hidden come back with it.
-                layoutSettings()
-                settingsPanel.panel.alphaValue = progress
-                settingsPanel.panel.orderFrontRegardless()
-            }
         }
         animate(to: 1)
     }
 
-    /// ⌘, (or launching peek again): text settings beside the note; opens the note if needed.
+    /// ⌘, (or launching peek again): the note panel shows the settings instead of the note
+    /// (same width); opens the panel if needed.
     func showSettings() {
-        settingsPanel.load()
+        settingsEditor.load()
         settingsOpen = true
-        if target == 0 { show() } else { layoutSettings() }
-        settingsPanel.panel.alphaValue = progress
-        settingsPanel.present()
+        swapContent()
+        if target == 0 { show() }
+        NSApp.activate()
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(settingsEditor.textView)
     }
 
     func toggleSettings() {
         if settingsOpen { hideSettings() } else { showSettings() }
     }
 
-    /// Closes the settings for good (⌘, / Esc). Hiding the note only fades them out with it.
+    /// Back to the note (⌘, / Esc). Hiding the panel keeps whichever is showing.
     func hideSettings() {
+        guard settingsOpen else { return }
+        settingsEditor.textView.commitComposition()
         settingsOpen = false
-        settingsPanel.hide()
-        if shrunkForSettings {
-            // Give the note its own width back.
-            shrunkForSettings = false
-            liveDepth = nil
-            applyFrame()
-        }
+        swapContent()
+        panel.makeFirstResponder(editor.textView)
     }
 
-    /// Docks the settings panel full-height against the note's inner side. If there's no room
-    /// for it, the note first narrows by the missing width (until the settings close).
-    private func layoutSettings() {
-        guard !isLayingOutSettings, let screen = targetScreen else { return }
-        isLayingOutSettings = true
-        defer { isLayingOutSettings = false }
-        let vf = screen.visibleFrame
-        let width = min(CGFloat(settings.minDepth), vf.width)  // settings are always min-width wide
-        var note = panel.frame
-        let room = settings.edge == .right ? note.minX - vf.minX : vf.maxX - note.maxX
-        if room < width && !shrunkForSettings && liveDepth == nil {
-            // Narrow the note just enough for the settings to fit beside it.
-            shrunkForSettings = true
-            setDepth(note.width - (width - room), persist: false)
-            note = panel.frame
-        }
-        let x = settings.edge == .right ? max(vf.minX, note.minX - width) : min(vf.maxX - width, note.maxX)
-        settingsPanel.setFrame(NSRect(x: x, y: vf.minY, width: width, height: vf.height))
+    private func swapContent() {
+        editor.scrollView.isHidden = settingsOpen
+        settingsEditor.scrollView.isHidden = !settingsOpen
     }
 
     func hide() {
         guard target != 0 else { return }
         // Don't leave a half-composed syllable behind.
         editor.textView.commitComposition()
-        settingsPanel.textView.commitComposition()
+        settingsEditor.textView.commitComposition()
         animate(to: 0)
     }
 
@@ -303,7 +279,6 @@ final class PanelController: NSObject {
     private func finishAnimation() {
         if target == 0 {
             panel.orderOut(nil)
-            if settingsOpen { settingsPanel.panel.orderOut(nil) }  // still open; returns with the note
             editor.saveNow()
         }
     }
@@ -388,7 +363,6 @@ final class PanelController: NSObject {
     // MARK: Changes
 
     private func edgeChanged() {
-        shrunkForSettings = false
         liveDepth = nil
         depthBeforeFill = nil
         applyFrame()
