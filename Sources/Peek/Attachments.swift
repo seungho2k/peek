@@ -25,8 +25,10 @@ final class RuleCell: NSTextAttachmentCell {
     ) -> NSRect {
         let font = Theme.font
         let height = ceil(font.ascender - font.descender + font.leading)
-        // Edge to edge like image rows (no gutter, no right margin).
-        let width = containerLineWidth(textContainer) - 2 * Theme.blockSideInset
+        // Full width: edge to edge like image rows. Numbered: after the gutter to the right edge.
+        let width = MainActor.assumeIsolated { Settings.shared.ruleStyle } == .numbered
+            ? containerLineWidth(textContainer) - Theme.gutterWidth - Theme.blockSideInset
+            : containerLineWidth(textContainer) - 2 * Theme.blockSideInset
         return NSRect(x: 0, y: floor(font.descender), width: max(1, width), height: height)
     }
 
@@ -53,9 +55,7 @@ final class RuleCell: NSTextAttachmentCell {
         Theme.rule.setFill()
         let scale = controlView?.window?.backingScaleFactor ?? 2
         let thickness = 1 / scale * max(1, scale / 2)
-        // The line keeps a margin on both sides (the cell itself spans the full width).
-        let m = Theme.ruleSideMargin - Theme.blockSideInset
-        NSRect(x: frame.minX + m, y: floor(frame.midY), width: max(1, frame.width - 2 * m), height: thickness).fill()
+        NSRect(x: frame.minX, y: floor(frame.midY), width: frame.width, height: thickness).fill()
     }
 }
 

@@ -112,6 +112,9 @@ final class PanelController: NSObject {
         settings.$shortcuts.dropFirst().sink { [weak self] shortcuts in
             DispatchQueue.main.async { self?.hotKey.register(shortcuts[.pin] ?? ShortcutAction.pin.defaultShortcut) }
         }.store(in: &cancellables)
+        settings.$ruleStyle.dropFirst().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.editor.textView.restyleAll() }
+        }.store(in: &cancellables)
         settings.$minDepth.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async { self?.applyFrame() }
         }.store(in: &cancellables)

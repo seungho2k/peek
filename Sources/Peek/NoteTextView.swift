@@ -15,6 +15,8 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// Character range edited since the last block normalization pass.
     private var pendingNormalizeRange: NSRange?
     private var isNormalizing = false
+    /// Last range edited in the text storage (for neighbour-dependent relayout).
+    private var lastEditedRange: NSRange?
 
     override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
         super.init(frame: frameRect, textContainer: container)
@@ -65,11 +67,22 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         NSPoint(x: 0, y: textContainerInset.height)
     }
 
+    /// Re-applies line styles to the whole note (e.g. after the rule style setting changes).
+    func restyleAll() {
+        guard let storage = textStorage, let lm = layoutManager else { return }
+        let all = NSRange(location: 0, length: storage.length)
+        storage.beginEditing()
+        storage.edited(.editedAttributes, range: all, changeInLength: 0)  // restyled in willProcessEditing
+        storage.endEditing()
+        lm.invalidateLayout(forCharacterRange: all, actualCharacterRange: nil)
+        needsDisplay = true
+    }
+
     // MARK: Line numbers
 
     /// Faint two-digit numbers (00, 01, …) in the left gutter of every text line.
-    /// Image and rule lines are not counted and use the gutter themselves; numbering restarts
-    /// at 00 after every rule.
+    /// Image lines are not counted. Rules depend on `RuleStyle`: full-width rules aren't counted
+    /// and restart numbering at 00; numbered rules count like a text line.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
         guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
@@ -94,14 +107,16 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
             }
         }
 
+        let ruleStyle = Settings.shared.ruleStyle
         var number = 0
         var index = 0
         while index < ns.length {
             let paragraph = ns.paragraphRange(for: NSRange(location: index, length: 0))
             let attachment = storage.attribute(.attachment, at: index, effectiveRange: nil)
-            if attachment is RuleAttachment {
+            let numbered = attachment == nil || (attachment is RuleAttachment && ruleStyle == .numbered)
+            if attachment is RuleAttachment && ruleStyle == .fullWidth {
                 number = 0  // each rule starts a new section, counted from 00
-            } else if attachment == nil {
+            } else if numbered {
                 let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
                 if frag.minY + origin.y > rect.maxY { return }
                 draw(number, lineTop: frag.minY)
@@ -146,6 +161,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     ) {
         MainActor.assumeIsolated {
             NoteFormat.restyle(textStorage, range: editedRange)
+            lastEditedRange = editedRange
             if editedMask.contains(.editedCharacters) {
                 pendingNormalizeRange = pendingNormalizeRange.map {
                     NSUnionRange(shifted($0, after: editedRange, delta: delta), editedRange)
@@ -178,9 +194,18 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
                 // above and below it matches the space between two text lines.
                 guard let height = ImageCell.rowWidths(in: storage, at: chars.location, container: textContainer).first?.height
                 else { return false }
+                // Between two image lines there is no space at all.
+                let ns = storage.string as NSString
+                let para = ns.paragraphRange(for: NSRange(location: chars.location, length: 0))
+                let prevIsImage = para.location > 0
+                    && storage.attribute(.attachment, at: NoteFormat.lineContentRange(in: ns, at: para.location - 1).location,
+                                         effectiveRange: nil) is ImageAttachment
+                let nextIsImage = NSMaxRange(para) < ns.length
+                    && storage.attribute(.attachment, at: NSMaxRange(para), effectiveRange: nil) is ImageAttachment
                 let capHeight = Theme.font.capHeight
-                let top = m.baseline - capHeight
-                let lineHeight = ceil(height + m.height - capHeight)
+                let top = prevIsImage ? 0 : m.baseline - capHeight
+                let bottom = nextIsImage ? 0 : m.height - m.baseline
+                let lineHeight = top + height + bottom  // not rounded: stacked images must touch exactly
                 lineFragmentRect.pointee.size.height = lineHeight
                 lineFragmentUsedRect.pointee.size.height = lineHeight
                 baselineOffset.pointee = top + height
@@ -202,6 +227,13 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     override func didChangeText() {
         super.didChangeText()
         needsDisplay = true  // line numbers below the edit may shift
+        // An image line's spacing depends on its neighbours: relayout the line before the edit too.
+        if let lm = layoutManager, let edit = lastEditedRange {
+            let ns = nsString
+            let start = edit.location > 0 ? ns.paragraphRange(for: NSRange(location: min(edit.location - 1, max(ns.length - 1, 0)), length: 0)).location : 0
+            let end = min(NSMaxRange(edit) + 1, ns.length)
+            if end > start { lm.invalidateLayout(forCharacterRange: NSRange(location: start, length: end - start), actualCharacterRange: nil) }
+        }
         guard !isNormalizing, !hasMarkedText(), let range = pendingNormalizeRange else { return }
         pendingNormalizeRange = nil
         isNormalizing = true

@@ -14,6 +14,10 @@ enum SelfTest {
         window.backgroundColor = Theme.background
         editor.scrollView.frame = window.contentView!.bounds
         window.contentView!.addSubview(editor.scrollView)
+        let previousRuleStyle = Settings.shared.ruleStyle
+        if let raw = ProcessInfo.processInfo.environment["PEEK_RULE_STYLE"], let style = RuleStyle(rawValue: raw) {
+            Settings.shared.ruleStyle = style
+        }
         let sample = ProcessInfo.processInfo.environment["PEEK_RENDER_TEXT"]?.replacingOccurrences(of: "\\n", with: "\n")
         editor.textView.load(markdown: sample ?? "한글 제목 line\n**굵은 줄**\n- 리스트\n  - 들여쓰기\n---\n마지막\n")
         editor.scrollView.tile()
@@ -33,6 +37,7 @@ enum SelfTest {
         image.unlockFocus()
         let tiff = image.tiffRepresentation!
         try? NSBitmapImageRep(data: tiff)!.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: path))
+        Settings.shared.ruleStyle = previousRuleStyle
         exit(0)
     }
 
@@ -269,6 +274,18 @@ enum SelfTest {
         print("     gaps: text=\(textGap) aboveImage=\(gapAbove) belowImage=\(gapBelow)")
         expect("gap above image matches text line gap", abs(gapAbove - textGap) < 1)
         expect("gap below image matches text line gap", abs(gapBelow - textGap) < 1)
+
+        // Consecutive image lines touch.
+        let stacked = makeView("a\n![](images/\(names[0]))\n![](images/\(names[1]))\nb")
+        let klm = stacked.layoutManager!, ktc = stacked.textContainer!
+        klm.ensureLayout(for: ktc)
+        let h1 = ImageCell.rowWidths(in: stacked.textStorage!, at: 2, container: ktc)[0].height
+        let firstBottom = klm.lineFragmentRect(forGlyphAt: 2, effectiveRange: nil).minY + klm.location(forGlyphAt: 2).y
+        let h2 = ImageCell.rowWidths(in: stacked.textStorage!, at: 4, container: ktc)[0].height
+        let secondTop = klm.lineFragmentRect(forGlyphAt: 4, effectiveRange: nil).minY + klm.location(forGlyphAt: 4).y - h2
+        _ = h1
+        print("     stacked: first bottom \(firstBottom), second top \(secondTop)")
+        expect("no space between consecutive image lines", abs(secondTop - firstBottom) < 0.01)
         let origin = layout.textContainerOrigin
         let hit1 = layout.imageAttachment(at: NSPoint(x: r1.midX + origin.x, y: r1.midY + origin.y))
         expect("double-click hit finds the second image", hit1?.name == names[1])

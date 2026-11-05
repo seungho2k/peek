@@ -232,7 +232,12 @@ enum NoteFormat {
             let bold = kind(of: storage, line: line) == .text && isBold(storage, line: line)
 
             ensureColor(storage, withBreak)
-            ensureParagraph(storage, withBreak, kind(of: storage, line: line) == .text ? Theme.textParagraph : Theme.blockParagraph)
+            let style: NSParagraphStyle = switch kind(of: storage, line: line) {
+            case .text: Theme.textParagraph
+            case .images: Theme.blockParagraph
+            case .rule: Settings.shared.ruleStyle == .numbered ? Theme.numberedRuleParagraph : Theme.blockParagraph
+            }
+            ensureParagraph(storage, withBreak, style)
             if bold && line.length > 0 {
                 ensureFont(storage, line, bold: true)
                 ensureFont(storage, NSRange(location: NSMaxRange(line), length: withBreak.length - line.length), bold: false)

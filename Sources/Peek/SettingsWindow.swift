@@ -33,6 +33,13 @@ struct SettingsView: View {
                 numberRow(settings.edge.isSide ? "Minimum Width" : "Minimum Height", unit: "pt", value: $settings.minDepth, range: 100...3000)
             }
 
+            Section("Note") {
+                Picker("Horizontal Rule", selection: $settings.ruleStyle) {
+                    ForEach(RuleStyle.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Animation") {
                 numberRow("Fade In", unit: "ms", value: $settings.slideInMs, range: 0...5000)
                 numberRow("Fade Out", unit: "ms", value: $settings.slideOutMs, range: 0...5000)
