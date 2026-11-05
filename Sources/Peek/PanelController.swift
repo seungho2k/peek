@@ -20,6 +20,8 @@ final class PanelController: NSObject {
     private var animTimer: Timer?
 
     private(set) var isPinned = false
+    /// Start of an ⌥-drag resize: mouse location and panel depth at mouse-down.
+    private var optionResize: (point: NSPoint, depth: CGFloat)?
     /// A mouse button went down inside the panel and is still held.
     private var pressBeganInside = false
     /// Polls the mouse while a button is held: during drag sessions (e.g. dragging a file
@@ -35,7 +37,7 @@ final class PanelController: NSObject {
 
     var onOpenSettings: (() -> Void)?
 
-    private static let handleThickness: CGFloat = 10
+    private static let handleThickness: CGFloat = 5
 
     override init() {
         editor = NoteEditor()
@@ -108,8 +110,13 @@ final class PanelController: NSObject {
             monitors.append(g)
         }
         if let l = NSEvent.addLocalMonitorForEvents(matching: mouseEvents, handler: { [weak self] event in
-            MainActor.assumeIsolated { self?.handleMouse(event, local: true) }
-            return event
+            let consumed = MainActor.assumeIsolated { () -> Bool in
+                guard let self else { return false }
+                if self.handleOptionResize(event) { return true }
+                self.handleMouse(event, local: true)
+                return false
+            }
+            return consumed ? nil : event
         }) {
             monitors.append(l)
         }
@@ -354,6 +361,37 @@ final class PanelController: NSObject {
     }
 
     // MARK: Resize
+
+    /// ⌥ + drag anywhere in the panel resizes it (relative to where the drag started).
+    private func handleOptionResize(_ event: NSEvent) -> Bool {
+        switch event.type {
+        case .leftMouseDown:
+            guard event.window === panel, event.modifierFlags.contains(.option) else { return false }
+            optionResize = (NSEvent.mouseLocation, settings.edge.isSide ? settings.sideWidth : settings.bottomHeight)
+            pressBeganInside = true
+            startPressPolling()
+            (settings.edge.isSide ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
+            return true
+        case .leftMouseDragged:
+            guard let start = optionResize, let screen = targetScreen else { return false }
+            let p = NSEvent.mouseLocation
+            let f = screen.frame
+            switch settings.edge {
+            case .right: settings.sideWidth = clampDepth(start.depth + start.point.x - p.x, span: f.width)
+            case .left: settings.sideWidth = clampDepth(start.depth + p.x - start.point.x, span: f.width)
+            case .bottom: settings.bottomHeight = clampDepth(start.depth + p.y - start.point.y, span: f.height)
+            }
+            applyFrame()
+            return true
+        case .leftMouseUp:
+            guard optionResize != nil else { return false }
+            optionResize = nil
+            NSCursor.pop()
+            return true
+        default:
+            return false
+        }
+    }
 
     private func resize(to point: NSPoint) {
         guard let screen = targetScreen else { return }

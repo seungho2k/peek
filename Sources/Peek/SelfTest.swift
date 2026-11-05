@@ -178,6 +178,16 @@ enum SelfTest {
         type(between, "hi")
         check("typing between images splits the row", between, "\(a)\nhi\n\(b)")
 
+        let merge = makeView("\(a)\n\(b)")
+        caret(merge, 2)
+        merge.deleteBackward(nil)
+        check("backspace joins two image lines", merge, a + b)
+
+        let mergeFwd = makeView("\(a)\n\(b)")
+        caret(mergeFwd, 1)
+        mergeFwd.deleteForward(nil)
+        check("forward delete joins two image lines", mergeFwd, a + b)
+
         let back = makeView("\(a)\ntext")
         caret(back, 2)
         back.deleteBackward(nil)

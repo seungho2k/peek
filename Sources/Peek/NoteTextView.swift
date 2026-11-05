@@ -317,7 +317,9 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
                 applyEdits([(NSRange(location: previous.location, length: sel.location - previous.location), plain(""))])
                 return
             }
-            if current.length > 0 && previous.length > 0 && (prevKind != .text || curKind != .text) {
+            let mergesImageRows = prevKind == .images && curKind == .images
+            if current.length > 0 && previous.length > 0 && !mergesImageRows
+                && (prevKind != .text || curKind != .text) {
                 // Would merge a block line with something else: just step back.
                 setSelectedRange(NSRange(location: sel.location - 1, length: 0))
                 return
@@ -339,7 +341,9 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
                 applyEdits([(NSRange(location: sel.location, length: NSMaxRange(next) - sel.location), plain(""))])
                 return
             }
-            if current.length > 0 && next.length > 0 && (nextKind != .text || curKind != .text) {
+            let mergesImageRows = nextKind == .images && curKind == .images
+            if current.length > 0 && next.length > 0 && !mergesImageRows
+                && (nextKind != .text || curKind != .text) {
                 setSelectedRange(NSRange(location: sel.location + 1, length: 0))
                 return
             }
