@@ -43,6 +43,8 @@ final class PanelController: NSObject {
     var onOpenSettings: (() -> Void)?
 
     private static let handleThickness: CGFloat = 5
+    /// ⌥-drag resize moves the edge this many times faster than the mouse.
+    private static let optionResizeGain: CGFloat = 3
 
     override init() {
         editor = NoteEditor()
@@ -241,7 +243,7 @@ final class PanelController: NSObject {
             startPressPolling()
             return
         case .leftMouseUp, .rightMouseUp, .otherMouseUp:
-            if NSEvent.pressedMouseButtons == 0 { pressBeganInside = false }
+            if !SystemState.isMouseButtonDown { pressBeganInside = false }
         default:
             break
         }
@@ -251,7 +253,7 @@ final class PanelController: NSObject {
     private func evaluateMouse(event: NSEvent?) {
         guard let screen = targetScreen else { return }
         let loc = NSEvent.mouseLocation
-        let buttonsDown = NSEvent.pressedMouseButtons != 0
+        let buttonsDown = SystemState.isMouseButtonDown
 
         if target == 0 {
             // Hidden or sliding out: only the screen edge brings it back (also mid-drag,
@@ -289,7 +291,7 @@ final class PanelController: NSObject {
         let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                if NSEvent.pressedMouseButtons == 0 {
+                if !SystemState.isMouseButtonDown {
                     self.pressPollTimer?.invalidate()
                     self.pressPollTimer = nil
                     self.pressBeganInside = false
@@ -471,10 +473,11 @@ final class PanelController: NSObject {
         case .leftMouseDragged:
             guard let start = optionResize, let screen = targetScreen else { return false }
             let p = NSEvent.mouseLocation
+            let k = Self.optionResizeGain
             switch settings.edge {
-            case .right: settings.sideWidth = clampDepth(start.depth + start.point.x - p.x, on: screen)
-            case .left: settings.sideWidth = clampDepth(start.depth + p.x - start.point.x, on: screen)
-            case .bottom: settings.bottomHeight = clampDepth(start.depth + p.y - start.point.y, on: screen)
+            case .right: settings.sideWidth = clampDepth(start.depth + (start.point.x - p.x) * k, on: screen)
+            case .left: settings.sideWidth = clampDepth(start.depth + (p.x - start.point.x) * k, on: screen)
+            case .bottom: settings.bottomHeight = clampDepth(start.depth + (p.y - start.point.y) * k, on: screen)
             }
             applyFrame()
             return true

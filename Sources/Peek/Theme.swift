@@ -40,8 +40,13 @@ enum Theme {
     static var font: NSFont { .systemFont(ofSize: fontSize) }
     static var boldFont: NSFont { .boldSystemFont(ofSize: fontSize) }
 
-    /// Text inset inside the panel (plus the text container's 5pt line fragment padding).
-    static let textInset = NSSize(width: 3, height: 6)
+    /// Text inset: `height` top/bottom; the text starts right after the line numbers and
+    /// keeps `2 × width` free on the right (see NoteTextView.textContainerOrigin).
+    static let textInset = NSSize(width: 4, height: 6)
+
+    /// Width of one space in the body font: the gap between a line number and its text,
+    /// so "01 text" reads as one continuous line.
+    static var spaceWidth: CGFloat { (" " as NSString).size(withAttributes: [.font: font]).width }
 
     static let imageGap: CGFloat = 4
 

@@ -3,8 +3,9 @@ import AppKit
 /// Faint two-digit line numbers (01, 02, …) beside each logical line.
 final class LineNumberRuler: NSRulerView {
     private static let font = NSFont.monospacedDigitSystemFont(ofSize: Theme.fontSize, weight: .regular)
-    private static let width: CGFloat = 26
-    private static let rightPadding: CGFloat = 4
+    private static let rightPadding = Theme.spaceWidth
+    private static let leftPadding: CGFloat = 6
+    private static let width = ceil(leftPadding + ("00" as NSString).size(withAttributes: [.font: font]).width + rightPadding)
     /// Distance from the top of a drawn label to its baseline.
     private static let labelBaseline = NSLayoutManager().defaultBaselineOffset(for: font)
 

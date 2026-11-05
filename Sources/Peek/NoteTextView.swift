@@ -25,6 +25,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         usesFindBar = false
         drawsBackground = false
         textContainerInset = Theme.textInset
+        textContainer?.lineFragmentPadding = 0
         insertionPointColor = Theme.text
         typingAttributes = NoteFormat.baseAttributes
 
@@ -44,6 +45,11 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         textStorage?.delegate = self
         layoutManager?.delegate = self
         updateDragTypeRegistration()
+    }
+
+    /// Text starts flush with the line-number ruler; the horizontal inset is all on the right.
+    override var textContainerOrigin: NSPoint {
+        NSPoint(x: 0, y: textContainerInset.height)
     }
 
     /// The first click on the (unfocused) panel both focuses it and places the caret.
