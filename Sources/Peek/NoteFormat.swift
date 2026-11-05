@@ -214,6 +214,25 @@ enum NoteFormat {
 
     // MARK: Styling
 
+    /// Show line 00 of every section (the first text line of the note and after each rule)
+    /// in bold. Display only: it isn't saved as `**…**`.
+    static var autoBoldFirstLine = false
+
+    /// Whether `line` is numbered 00: no text line between it and the start / the last rule.
+    static func isFirstLineOfSection(_ storage: NSAttributedString, _ line: NSRange) -> Bool {
+        let ns = storage.string as NSString
+        var loc = line.location
+        while loc > 0 {
+            let previous = lineContentRange(in: ns, at: loc - 1)
+            switch kind(of: storage, line: previous) {
+            case .images: loc = previous.location
+            case .rule: return true
+            case .text: return false
+            }
+        }
+        return true
+    }
+
     /// Re-derives fonts/colors for every line touching `range`.
     ///
     /// Only touches attributes that actually differ: this runs inside text storage editing,
@@ -226,10 +245,16 @@ enum NoteFormat {
         let ns = storage.string as NSString
         guard ns.length > 0 else { return }
         let start = min(range.location, ns.length)
-        let full = ns.paragraphRange(for: NSRange(location: start, length: min(range.length, ns.length - start)))
+        var full = ns.paragraphRange(for: NSRange(location: start, length: min(range.length, ns.length - start)))
+        // Also the following line: whether it is a section's first line (auto bold) can change.
+        if autoBoldFirstLine && NSMaxRange(full) < ns.length {
+            full = NSUnionRange(full, ns.paragraphRange(for: NSRange(location: NSMaxRange(full), length: 0)))
+        }
         for line in lineRanges(in: ns, covering: full) {
             let withBreak = NSRange(location: line.location, length: min(line.length + 1, ns.length - line.location))
-            let bold = kind(of: storage, line: line) == .text && isBold(storage, line: line)
+            let isText = kind(of: storage, line: line) == .text
+            let explicitBold = isText && isBold(storage, line: line)  // saved as **…**
+            let bold = explicitBold || (isText && autoBoldFirstLine && isFirstLineOfSection(storage, line))
 
             ensureColor(storage, withBreak)
             ensureParagraph(storage, withBreak, kind(of: storage, line: line) == .text ? Theme.textParagraph : Theme.blockParagraph)
@@ -239,7 +264,7 @@ enum NoteFormat {
             } else {
                 ensureFont(storage, withBreak, bold: false)
             }
-            ensureBoldMark(storage, line, on: bold)
+            ensureBoldMark(storage, line, on: explicitBold)
             if kind(of: storage, line: line) == .text { ensureLink(storage, line) }
             if withBreak.length > line.length {
                 ensureBoldMark(storage, NSRange(location: NSMaxRange(line), length: 1), on: false)

@@ -10,6 +10,7 @@ MainActor.assumeIsolated {
     if let i = CommandLine.arguments.firstIndex(of: "--render-settings"), i + 1 < CommandLine.arguments.count {
         _ = NSApplication.shared
         DebugLog.enabled = false
+        NoteFormat.autoBoldFirstLine = Settings.shared.autoBoldFirstLine
         SettingsPanelController().debugRender(to: CommandLine.arguments[i + 1])
         exit(0)
     }

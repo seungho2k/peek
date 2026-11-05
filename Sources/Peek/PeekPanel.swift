@@ -40,7 +40,7 @@ final class ResizeHandle: NSView {
     var onDragEnded: (() -> Void)?
 
     override func resetCursorRects() {
-        addCursorRect(bounds, cursor: edge.isSide ? .resizeLeftRight : .resizeUpDown)
+        addCursorRect(bounds, cursor: .resizeLeftRight)
     }
 
     override func mouseDown(with event: NSEvent) {}

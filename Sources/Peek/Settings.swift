@@ -3,16 +3,14 @@ import Combine
 import ServiceManagement
 
 enum PeekEdge: String, CaseIterable, Identifiable {
-    case right, left, bottom
+    case right, left
     var id: String { rawValue }
     var title: String {
         switch self {
         case .right: "Right"
         case .left: "Left"
-        case .bottom: "Bottom"
         }
     }
-    var isSide: Bool { self != .bottom }
 }
 
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
@@ -45,7 +43,6 @@ final class Settings: ObservableObject {
     private let defaults = UserDefaults.standard
 
     static let defaultSideWidth: CGFloat = 360
-    static let defaultBottomHeight: CGFloat = 320
 
     @Published var edge: PeekEdge {
         didSet { defaults.set(edge.rawValue, forKey: "edge") }
@@ -62,11 +59,11 @@ final class Settings: ObservableObject {
     @Published var sideWidth: CGFloat {
         didSet { defaults.set(Double(sideWidth), forKey: "sideWidth") }
     }
-    /// Panel height when peeking from the bottom edge.
-    @Published var bottomHeight: CGFloat {
-        didSet { defaults.set(Double(bottomHeight), forKey: "bottomHeight") }
+    /// Line 00 of every section is shown in bold.
+    @Published var autoBoldFirstLine: Bool {
+        didSet { defaults.set(autoBoldFirstLine, forKey: "autoBoldFirstLine") }
     }
-    /// Smallest panel width (left/right) or height (bottom), in pt.
+    /// Smallest panel width, in pt.
     @Published var minDepth: Double {
         didSet { defaults.set(minDepth, forKey: "minDepth") }
     }
@@ -88,7 +85,8 @@ final class Settings: ObservableObject {
         minDepth = defaults.object(forKey: "minDepth") as? Double ?? 200
         defaults.removeObject(forKey: "ruleStyle")  // setting removed (full-width rules)
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
-        bottomHeight = CGFloat(defaults.object(forKey: "bottomHeight") as? Double ?? Double(Self.defaultBottomHeight))
+        defaults.removeObject(forKey: "bottomHeight")  // bottom edge removed
+        autoBoldFirstLine = defaults.object(forKey: "autoBoldFirstLine") as? Bool ?? true
 
         var sc: [ShortcutAction: Shortcut] = [:]
         if let data = defaults.data(forKey: "shortcuts"),

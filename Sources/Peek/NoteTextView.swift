@@ -67,6 +67,23 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         NSPoint(x: 0, y: textContainerInset.height)
     }
 
+    /// Re-applies line styles to the whole note (e.g. after a display setting changes).
+    func restyleAll() {
+        guard let storage = textStorage, let lm = layoutManager else { return }
+        let all = NSRange(location: 0, length: storage.length)
+        storage.beginEditing()
+        storage.edited(.editedAttributes, range: all, changeInLength: 0)  // restyled in willProcessEditing
+        storage.endEditing()
+        lm.invalidateLayout(forCharacterRange: all, actualCharacterRange: nil)
+        needsDisplay = true
+    }
+
+    /// Esc: used by the settings panel to close itself.
+    var onEscape: (() -> Void)?
+    override func cancelOperation(_ sender: Any?) {
+        if let onEscape { onEscape() } else { super.cancelOperation(sender) }
+    }
+
     // MARK: Line numbers
 
     /// Faint two-digit numbers (00, 01, …) in the left gutter of every text line.

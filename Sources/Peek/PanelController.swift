@@ -27,12 +27,16 @@ final class PanelController: NSObject {
     private var cancellables: Set<AnyCancellable> = []
 
     let settingsPanel = SettingsPanelController()
+    /// The note was narrowed to make room for the settings panel.
+    private var shrunkForSettings = false
+    private var isLayingOutSettings = false
 
     private static let handleThickness: CGFloat = 5
     /// ⌥-drag resize moves the edge this many times faster than the mouse.
     private static let optionResizeGain: CGFloat = 2
 
     override init() {
+        NoteFormat.autoBoldFirstLine = Settings.shared.autoBoldFirstLine
         editor = NoteEditor()
         super.init()
         setUpContent()
@@ -42,6 +46,8 @@ final class PanelController: NSObject {
         hotKey.onPress = { [weak self] in self?.hotKeyPressed() }
         hotKey.register(settings.shortcut(for: .pin))
         editor.textView.onOpenSettings = { [weak self] in self?.toggleSettings() }
+        settingsPanel.onClose = { [weak self] in self?.hideSettings() }
+        settingsPanel.onWidthChange = { [weak self] in self?.layoutSettings() }
         editor.textView.onToggleFill = { [weak self] in self?.toggleFill() }
 
         #if DEBUG
@@ -90,9 +96,6 @@ final class PanelController: NSObject {
         case .left:
             resizeHandle.frame = NSRect(x: b.width - t, y: 0, width: t, height: b.height)
             resizeHandle.autoresizingMask = [.height, .minXMargin]
-        case .bottom:
-            resizeHandle.frame = NSRect(x: 0, y: b.height - t, width: b.width, height: t)
-            resizeHandle.autoresizingMask = [.width, .minYMargin]
         }
         resizeHandle.edge = settings.edge
 
@@ -101,6 +104,13 @@ final class PanelController: NSObject {
     private func observeSettings() {
         settings.$shortcuts.dropFirst().sink { [weak self] shortcuts in
             DispatchQueue.main.async { self?.hotKey.register(shortcuts[.pin] ?? ShortcutAction.pin.defaultShortcut) }
+        }.store(in: &cancellables)
+        settings.$autoBoldFirstLine.dropFirst().sink { [weak self] on in
+            DispatchQueue.main.async {
+                NoteFormat.autoBoldFirstLine = on
+                self?.editor.textView.restyleAll()
+                self?.settingsPanel.textView.restyleAll()
+            }
         }.store(in: &cancellables)
         settings.$minDepth.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async { self?.applyFrame() }
@@ -129,12 +139,11 @@ final class PanelController: NSObject {
         switch settings.edge {
         case .right: return screens.max { $0.frame.maxX < $1.frame.maxX }
         case .left: return screens.min { $0.frame.minX < $1.frame.minX }
-        case .bottom: return screens.first  // the screen with the menu bar
         }
     }
 
     private func depth(for screen: NSScreen) -> CGFloat {
-        clampDepth(liveDepth ?? (settings.edge.isSide ? settings.sideWidth : settings.bottomHeight), on: screen)
+        clampDepth(liveDepth ?? settings.sideWidth, on: screen)
     }
 
     /// Largest depth: the panel fills the screen like Window ▸ Fill (menu bar excluded).
@@ -143,7 +152,6 @@ final class PanelController: NSObject {
         switch settings.edge {
         case .right: return f.maxX - vf.minX
         case .left: return vf.maxX - f.minX
-        case .bottom: return vf.maxY - f.minY
         }
     }
 
@@ -163,7 +171,6 @@ final class PanelController: NSObject {
         switch settings.edge {
         case .right: return NSRect(x: f.maxX - d, y: vf.minY, width: d, height: vf.height)
         case .left: return NSRect(x: f.minX, y: vf.minY, width: d, height: vf.height)
-        case .bottom: return NSRect(x: vf.minX, y: f.minY, width: vf.width, height: d)
         }
     }
 
@@ -174,7 +181,7 @@ final class PanelController: NSObject {
         if newFrame != panel.frame {
             panel.setFrame(newFrame, display: true)
             layoutContent()
-            if settingsPanel.isVisible { settingsPanel.reposition(besideNote: newFrame, edge: settings.edge) }
+            if settingsPanel.isVisible { layoutSettings() }
         }
         panel.alphaValue = progress
     }
@@ -193,16 +200,47 @@ final class PanelController: NSObject {
     /// ⌘, (or launching peek again): text settings beside the note; opens the note if needed.
     func showSettings() {
         if target == 0 { show() }
-        settingsPanel.show(besideNote: panel.frame, edge: settings.edge)
+        settingsPanel.load()
+        layoutSettings()
+        settingsPanel.present()
     }
 
     func toggleSettings() {
-        if settingsPanel.isVisible { settingsPanel.hide() } else { showSettings() }
+        if settingsPanel.isVisible { hideSettings() } else { showSettings() }
+    }
+
+    func hideSettings() {
+        settingsPanel.hide()
+        if shrunkForSettings {
+            // Give the note its own width back.
+            shrunkForSettings = false
+            liveDepth = nil
+            applyFrame()
+        }
+    }
+
+    /// Docks the settings panel full-height against the note's inner side. If there's no room
+    /// for it, the note first shrinks to its minimum width (until the settings close).
+    private func layoutSettings() {
+        guard !isLayingOutSettings, let screen = targetScreen else { return }
+        isLayingOutSettings = true
+        defer { isLayingOutSettings = false }
+        let vf = screen.visibleFrame
+        let width = min(settingsPanel.preferredWidth, vf.width)
+        var note = panel.frame
+        let room = settings.edge == .right ? note.minX - vf.minX : vf.maxX - note.maxX
+        if room < width && !shrunkForSettings && liveDepth == nil {
+            shrunkForSettings = true
+            setDepth(CGFloat(settings.minDepth), persist: false)
+            note = panel.frame
+        }
+        let x = settings.edge == .right ? max(vf.minX, note.minX - width) : min(vf.maxX - width, note.maxX)
+        settingsPanel.setFrame(NSRect(x: x, y: vf.minY, width: width, height: vf.height))
     }
 
     func hide() {
         guard target != 0 else { return }
-        settingsPanel.hide()
+        hideSettings()
         // Don't leave a half-composed syllable behind.
         editor.textView.commitComposition()
         animate(to: 0)
@@ -271,7 +309,7 @@ final class PanelController: NSObject {
         let d = clampDepth(value, on: screen)
         if persist {
             liveDepth = nil
-            if settings.edge.isSide { settings.sideWidth = d } else { settings.bottomHeight = d }
+            settings.sideWidth = d
         } else {
             liveDepth = d
         }
@@ -303,7 +341,7 @@ final class PanelController: NSObject {
             guard let screen = targetScreen else { return false }
             optionResize = (NSEvent.mouseLocation, depth(for: screen))
             depthBeforeFill = nil
-            (settings.edge.isSide ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
+            NSCursor.resizeLeftRight.push()
             return true
         case .leftMouseDragged:
             guard let start = optionResize else { return false }
@@ -312,7 +350,6 @@ final class PanelController: NSObject {
             switch settings.edge {
             case .right: setDepth(start.depth + (start.point.x - p.x) * k, persist: false)
             case .left: setDepth(start.depth + (p.x - start.point.x) * k, persist: false)
-            case .bottom: setDepth(start.depth + (p.y - start.point.y) * k, persist: false)
             }
             return true
         case .leftMouseUp:
@@ -333,13 +370,13 @@ final class PanelController: NSObject {
         switch settings.edge {
         case .right: setDepth(f.maxX - point.x, persist: false)
         case .left: setDepth(point.x - f.minX, persist: false)
-        case .bottom: setDepth(point.y - f.minY, persist: false)
         }
     }
 
     // MARK: Changes
 
     private func edgeChanged() {
+        shrunkForSettings = false
         liveDepth = nil
         depthBeforeFill = nil
         applyFrame()

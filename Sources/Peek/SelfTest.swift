@@ -50,6 +50,7 @@ enum SelfTest {
         clickLines()
         links()
         settingsText()
+        autoBold()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -412,7 +413,7 @@ enum SelfTest {
     private static func settingsText() {
         let formatted = SettingsText.format(Settings.shared)
         let (changes, invalid) = SettingsText.parse(formatted)
-        expect("formatted settings parse cleanly", invalid.isEmpty && changes.count == formatted.components(separatedBy: "\n").count)
+        expect("formatted settings parse cleanly", invalid.isEmpty && changes.count == formatted.components(separatedBy: "\n---\n").count - 1)
 
         for (text, code, mods) in [("cmd+-", KeyCode.minus, NSEvent.ModifierFlags.command),
                                    ("opt+space", KeyCode.space, .option),
@@ -424,9 +425,30 @@ enum SelfTest {
             if let sc { expect("format \(text)", ShortcutText.format(sc) == text) }
         }
 
-        let bad = SettingsText.parse("edge: middle\nmin-size: abc\nfoo: bar\nbold: b\nfade-in: 90\n\nrule: cmd+k\nfill: cmd+k")
-        expect("bad lines flagged (\(bad.invalid.sorted()))", bad.invalid == [0, 1, 2, 3, 6, 7])
+        let sample = "preferences\n---\nedge\nmiddle\n---\nmin-width\nabc\n---\nfoo\nbar\n---\nbold\nb\n---\nfade-in\n90\n---\nrule\ncmd+k\n---\nfill\ncmd+k\n---\nfade-out"
+        let bad = SettingsText.parse(sample)
+        // lines: 0 preferences, 2 edge, 3 middle, 5 min-width, 6 abc, 8 foo, 9 bar, 11 bold, 12 b,
+        // 14 fade-in, 15 90, 17 rule, 18 cmd+k, 20 fill, 21 cmd+k, 23 fade-out (no value)
+        expect("bad lines flagged (\(bad.invalid.sorted()))", bad.invalid == [3, 6, 8, 12, 18, 21, 23])
         expect("good line applied", bad.changes == [.fadeIn(90)])
+    }
+
+    private static func autoBold() {
+        let saved = NoteFormat.autoBoldFirstLine
+        NoteFormat.autoBoldFirstLine = true
+        let tv = makeView("title\nbody\n---\nnext\nmore")
+        let boldAt = { (i: Int) in
+            (tv.textStorage!.attribute(.font, at: i, effectiveRange: nil) as! NSFont).fontDescriptor.symbolicTraits.contains(.bold)
+        }
+        expect("line 00 bold", boldAt(0))
+        expect("line 01 regular", !boldAt(7))
+        expect("line 00 after a rule bold", boldAt(14))
+        expect("next line regular", !boldAt(19))
+        check("auto bold isn't saved", tv, "title\nbody\n---\nnext\nmore")
+        caret(tv, 0)
+        type(tv, "x\n")
+        expect("new first line bold, old first line now regular", boldAt(0) && !boldAt(2))
+        NoteFormat.autoBoldFirstLine = saved
     }
 
     private static func undo() {

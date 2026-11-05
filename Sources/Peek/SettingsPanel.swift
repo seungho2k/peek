@@ -1,166 +1,130 @@
 import AppKit
 
-/// Text-based settings: a small panel docked beside the note (on its inner side). Edits apply
-/// as you type; lines that can't be applied turn red. ⌘, or Esc closes it.
+/// Text-based settings, shown in a full-height panel docked beside the note. It uses the note's
+/// own text view, so it has the same line numbers, rules and section bolding. Edits apply as
+/// you type; lines that can't be applied turn red. ⌘, or Esc closes it.
 @MainActor
 final class SettingsPanelController: NSObject, NSTextViewDelegate {
     let panel = PeekPanel()
-    private let textView: SettingsTextView = {
-        let storage = NSTextStorage()
-        let lm = NSLayoutManager()
-        storage.addLayoutManager(lm)
-        let container = NSTextContainer(size: NSSize(width: 10_000, height: 10_000))
-        lm.addTextContainer(container)
-        return SettingsTextView(frame: .zero, textContainer: container)
-    }()
+    private let scrollView = NSScrollView()
+    let textView: NoteTextView
     private let settings = Settings.shared
-    private static let padding = NSSize(width: 10, height: 8)
+
+    /// Close request (⌘, or Esc).
+    var onClose: (() -> Void)?
+    /// The text changed width (e.g. a longer value); the owner re-docks the panel.
+    var onWidthChange: (() -> Void)?
 
     var isVisible: Bool { panel.isVisible }
 
     override init() {
+        let storage = NSTextStorage()
+        let layoutManager = NSLayoutManager()
+        storage.addLayoutManager(layoutManager)
+        let container = NSTextContainer(size: NSSize(width: 300, height: CGFloat.greatestFiniteMagnitude))
+        container.widthTracksTextView = true
+        layoutManager.addTextContainer(container)
+        textView = NoteTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 600), textContainer: container)
         super.init()
-        textView.delegate = self
-        textView.onClose = { [weak self] in self?.hide() }
-        textView.textContainerInset = Self.padding
-        textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainer?.widthTracksTextView = false
-        textView.textContainer?.containerSize = NSSize(width: 10_000, height: 10_000)
+
+        textView.minSize = .zero
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
-        textView.isVerticallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.delegate = self
+        textView.onOpenSettings = { [weak self] in self?.onClose?() }
+        textView.onEscape = { [weak self] in self?.onClose?() }
+
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = false
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.autoresizingMask = [.width, .height]
         let content = NSView()
-        content.addSubview(textView)
+        content.addSubview(scrollView)
         panel.contentView = content
     }
 
-    /// Shows the panel beside `noteFrame` and gives it keyboard focus.
-    func show(besideNote noteFrame: NSRect, edge: PeekEdge) {
-        let text = SettingsText.format(settings)
-        textView.string = text
-        textView.typingAttributes = Self.attributes
-        textView.textStorage?.setAttributes(Self.attributes, range: NSRange(location: 0, length: (text as NSString).length))
-        reposition(besideNote: noteFrame, edge: edge)
+    /// Fills the panel with the current settings.
+    func load() {
+        textView.load(markdown: SettingsText.format(settings))
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        markInvalid([])
+    }
+
+    /// Width that fits the longest line (plus gutter and margin).
+    var preferredWidth: CGFloat {
+        let widest = textView.string.components(separatedBy: "\n")
+            .map { ($0 as NSString).size(withAttributes: [.font: Theme.boldFont]).width }
+            .max() ?? 0
+        return ceil(Theme.gutterWidth + widest + Theme.textRightMargin + 8)
+    }
+
+    func setFrame(_ frame: NSRect) {
+        panel.setFrame(frame, display: true)
+        scrollView.frame = NSRect(origin: .zero, size: frame.size)
+    }
+
+    /// Shows it and gives it keyboard focus.
+    func present() {
         panel.alphaValue = 1
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(textView)
-        textView.setSelectedRange(NSRange(location: 0, length: 0))
     }
 
     func hide() {
+        textView.commitComposition()
         panel.orderOut(nil)
     }
 
+    func textDidChange(_ notification: Notification) {
+        let oldWidth = panel.frame.width
+        let (changes, invalid) = SettingsText.parse(textView.markdown())
+        SettingsText.apply(changes, to: settings)
+        markInvalid(invalid)
+        if preferredWidth != oldWidth { onWidthChange?() }
+    }
+
+    /// Red for lines that couldn't be applied (layout-only attribute, not part of the text).
+    private func markInvalid(_ lines: Set<Int>) {
+        guard let lm = textView.layoutManager, let storage = textView.textStorage else { return }
+        let ns = storage.string as NSString
+        lm.removeTemporaryAttribute(.foregroundColor, forCharacterRange: NSRange(location: 0, length: ns.length))
+        var index = 0, line = 0
+        while index < ns.length {
+            let paragraph = ns.paragraphRange(for: NSRange(location: index, length: 0))
+            if lines.contains(line) {
+                lm.addTemporaryAttribute(.foregroundColor, value: Theme.invalid, forCharacterRange: paragraph)
+            }
+            index = NSMaxRange(paragraph)
+            line += 1
+        }
+    }
+
     #if DEBUG
-    /// Draws the panel content with some lines made invalid, for visual checks.
+    /// Draws the panel content (with one invalid value) for visual checks.
     func debugRender(to path: String) {
-        textView.string = SettingsText.format(settings) + "\nedge: middle"
-        textView.textStorage?.setAttributes(Self.attributes, range: NSRange(location: 0, length: (textView.string as NSString).length))
-        markInvalid(SettingsText.parse(textView.string).invalid)
-        let size = fittingSize()
-        textView.frame = NSRect(origin: .zero, size: size)
+        load()
+        // "preferences" + rule + "edge" + "right": make the edge value invalid.
+        let valueEnd = ("preferences\n-\nedge\nright" as NSString).length
+        textView.setSelectedRange(NSRange(location: valueEnd, length: 0))
+        textView.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
+        let size = NSSize(width: preferredWidth, height: 420)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = scrollView
+        scrollView.frame = NSRect(origin: .zero, size: size)
+        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
         let image = NSImage(size: size)
         image.lockFocusFlipped(true)
         Theme.background.setFill(); NSRect(origin: .zero, size: size).fill()
         let rep = textView.bitmapImageRepForCachingDisplay(in: textView.bounds)!
         textView.cacheDisplay(in: textView.bounds, to: rep)
-        rep.draw(in: NSRect(origin: .zero, size: size), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        rep.draw(in: NSRect(origin: .zero, size: textView.bounds.size), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         image.unlockFocus()
         try? NSBitmapImageRep(data: image.tiffRepresentation!)!.representation(using: .png, properties: [:])!
             .write(to: URL(fileURLWithPath: path))
     }
     #endif
-
-    /// Sizes the panel to its text (minimal) and docks it against the note's inner side,
-    /// top-aligned (left/right edge) or left-aligned (bottom edge).
-    func reposition(besideNote noteFrame: NSRect, edge: PeekEdge) {
-        let size = fittingSize()
-        let origin: NSPoint = switch edge {
-        case .right: NSPoint(x: noteFrame.minX - size.width, y: noteFrame.maxY - size.height)
-        case .left: NSPoint(x: noteFrame.maxX, y: noteFrame.maxY - size.height)
-        case .bottom: NSPoint(x: noteFrame.minX, y: noteFrame.maxY)
-        }
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
-        textView.frame = NSRect(origin: .zero, size: size)
-    }
-
-    private static var attributes: [NSAttributedString.Key: Any] {
-        [.font: Theme.font, .foregroundColor: Theme.text]
-    }
-
-    private func fittingSize() -> NSSize {
-        let lines = textView.string.components(separatedBy: "\n")
-        let widest = lines.map { ($0 as NSString).size(withAttributes: Self.attributes).width }.max() ?? 0
-        let lineHeight = NSLayoutManager().defaultLineHeight(for: Theme.font)
-        return NSSize(width: ceil(widest + 2 * Self.padding.width + 12),
-                      height: ceil(CGFloat(max(lines.count, 1)) * lineHeight + 2 * Self.padding.height))
-    }
-
-    func textDidChange(_ notification: Notification) {
-        let (changes, invalid) = SettingsText.parse(textView.string)
-        SettingsText.apply(changes, to: settings)
-        markInvalid(invalid)
-        // Grow/shrink with the text, keeping the docked corner in place.
-        let old = panel.frame
-        let size = fittingSize()
-        let edge = settings.edge
-        let origin = NSPoint(x: edge == .right ? old.maxX - size.width : old.minX,
-                             y: edge == .bottom ? old.minY : old.maxY - size.height)
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
-        textView.frame = NSRect(origin: .zero, size: size)
-    }
-
-    private func markInvalid(_ lines: Set<Int>) {
-        guard let storage = textView.textStorage else { return }
-        let ns = storage.string as NSString
-        storage.beginEditing()
-        var index = 0, line = 0
-        while index <= ns.length {
-            let range = ns.lineRange(for: NSRange(location: min(index, ns.length), length: 0))
-            let color = lines.contains(line) ? Theme.invalid : Theme.text
-            if range.length > 0 { storage.addAttribute(.foregroundColor, value: color, range: range) }
-            if NSMaxRange(range) >= ns.length { break }
-            index = NSMaxRange(range)
-            line += 1
-        }
-        storage.endEditing()
-    }
-}
-
-final class SettingsTextView: NSTextView {
-    var onClose: (() -> Void)?
-
-    override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
-        super.init(frame: frameRect, textContainer: container)
-        isRichText = false
-        allowsUndo = true
-        drawsBackground = false
-        insertionPointColor = Theme.text
-        isContinuousSpellCheckingEnabled = false
-        isGrammarCheckingEnabled = false
-        isAutomaticSpellingCorrectionEnabled = false
-        isAutomaticQuoteSubstitutionEnabled = false
-        isAutomaticDashSubstitutionEnabled = false
-        isAutomaticTextReplacementEnabled = false
-        isAutomaticLinkDetectionEnabled = false
-        isAutomaticDataDetectionEnabled = false
-        isAutomaticTextCompletionEnabled = false
-        smartInsertDeleteEnabled = false
-        inlinePredictionType = .no
-        writingToolsBehavior = .none
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func cancelOperation(_ sender: Any?) { onClose?() }  // Esc
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if Settings.shared.shortcut(for: .settings).matches(event) {
-            onClose?()
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
 }

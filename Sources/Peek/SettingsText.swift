@@ -1,92 +1,115 @@
 import AppKit
 
-/// The settings as editable text, one `key: value` per line:
+/// The settings as editable text: a title section, then one section per setting, separated by
+/// rules — the key on line 00 and its value on line 01:
 ///
-///     edge: right
-///     min-size: 200
-///     fade-in: 150
-///     fade-out: 120
-///     launch-at-login: off
-///     toggle: opt+space
-///     bold: cmd+b
-///     rule: cmd+l
-///     fill: cmd+enter
-///     settings: cmd+,
+///     preferences
+///     ---
+///     edge
+///     right
+///     ---
+///     min-width
+///     200
+///     ---
+///     …
 @MainActor
 enum SettingsText {
+    static let title = "preferences"
+
     private static let shortcutKeys: [(key: String, action: ShortcutAction)] = [
         ("toggle", .pin), ("bold", .bold), ("rule", .rule), ("fill", .fill), ("settings", .settings),
     ]
 
     static func format(_ s: Settings) -> String {
-        var lines = [
-            "edge: \(s.edge.rawValue)",
-            "min-size: \(Int(s.minDepth))",
-            "fade-in: \(Int(s.slideInMs))",
-            "fade-out: \(Int(s.slideOutMs))",
-            "launch-at-login: \(s.launchAtLogin ? "on" : "off")",
+        var sections: [(String, String)] = [
+            ("edge", s.edge.rawValue),
+            ("min-width", "\(Int(s.minDepth))"),
+            ("fade-in", "\(Int(s.slideInMs))"),
+            ("fade-out", "\(Int(s.slideOutMs))"),
+            ("launch-at-login", s.launchAtLogin ? "on" : "off"),
+            ("bold-first-line", s.autoBoldFirstLine ? "on" : "off"),
         ]
         for (key, action) in shortcutKeys {
-            lines.append("\(key): \(ShortcutText.format(s.shortcut(for: action)))")
+            sections.append((key, ShortcutText.format(s.shortcut(for: action))))
         }
-        return lines.joined(separator: "\n")
+        return ([title] + sections.map { "\($0.0)\n\($0.1)" }).joined(separator: "\n---\n")
     }
 
-    /// One parsed line: what to change, or nil if the line is blank.
     enum Change: Equatable {
         case edge(PeekEdge)
-        case minSize(Double)
+        case minWidth(Double)
         case fadeIn(Double)
         case fadeOut(Double)
         case launchAtLogin(Bool)
+        case autoBoldFirstLine(Bool)
         case shortcut(ShortcutAction, Shortcut)
     }
 
-    /// Parses every line; `invalid` holds the indices of lines that couldn't be applied
-    /// (unknown key, bad value, or a shortcut used twice).
+    /// Parses the sections; `invalid` holds indices of lines that couldn't be applied
+    /// (unknown key, missing/bad value, or a shortcut used twice).
     static func parse(_ text: String) -> (changes: [Change], invalid: Set<Int>) {
+        let lines = text.components(separatedBy: "\n")
+        var sections: [[(index: Int, text: String)]] = [[]]
+        for (i, raw) in lines.enumerated() {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line == "---" { sections.append([]); continue }
+            if line.isEmpty { continue }
+            // A line made bold by hand is saved as **…**; read the text inside.
+            let plain = line.count >= 4 && line.hasPrefix("**") && line.hasSuffix("**") ? String(line.dropFirst(2).dropLast(2)) : line
+            sections[sections.count - 1].append((i, plain))
+        }
+
         var changes: [(line: Int, change: Change)] = []
         var invalid: Set<Int> = []
-        for (i, raw) in text.components(separatedBy: "\n").enumerated() {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty { continue }
-            guard let change = parseLine(line) else { invalid.insert(i); continue }
-            changes.append((i, change))
+        for section in sections.dropFirst() where !section.isEmpty {  // the first section is the title
+            let key = section[0]
+            guard section.count >= 2 else { invalid.insert(key.index); continue }
+            let value = section[1]
+            switch parseValue(key: key.text.lowercased(), value: value.text.lowercased()) {
+            case .unknownKey: invalid.insert(key.index)
+            case .badValue: invalid.insert(value.index)
+            case .ok(let change): changes.append((value.index, change))
+            }
+            for extra in section.dropFirst(2) { invalid.insert(extra.index) }
         }
-        // A shortcut that appears on more than one line is ambiguous: apply none of them.
+        // A shortcut that appears in more than one section is ambiguous: apply none of them.
         var byShortcut: [Shortcut: [Int]] = [:]
         for (line, change) in changes {
             if case .shortcut(_, let sc) = change { byShortcut[sc, default: []].append(line) }
         }
-        for lines in byShortcut.values where lines.count > 1 { invalid.formUnion(lines) }
+        for dupes in byShortcut.values where dupes.count > 1 { invalid.formUnion(dupes) }
         return (changes.filter { !invalid.contains($0.line) }.map(\.change), invalid)
     }
 
-    private static func parseLine(_ line: String) -> Change? {
-        guard let colon = line.firstIndex(of: ":") else { return nil }
-        let key = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
-        let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces).lowercased()
+    private enum Parsed { case ok(Change), unknownKey, badValue }
+
+    private static func parseValue(key: String, value: String) -> Parsed {
+        func onOff(_ v: String) -> Bool? {
+            switch v {
+            case "on", "yes", "true": true
+            case "off", "no", "false": false
+            default: nil
+            }
+        }
         switch key {
         case "edge":
-            return PeekEdge(rawValue: value).map(Change.edge)
-        case "min-size":
-            guard let n = Double(value), (100...3000).contains(n) else { return nil }
-            return .minSize(n)
+            return PeekEdge(rawValue: value).map { .ok(.edge($0)) } ?? .badValue
+        case "min-width":
+            guard let n = Double(value), (100...3000).contains(n) else { return .badValue }
+            return .ok(.minWidth(n))
         case "fade-in", "fade-out":
-            guard let n = Double(value), (0...5000).contains(n) else { return nil }
-            return key == "fade-in" ? .fadeIn(n) : .fadeOut(n)
+            guard let n = Double(value), (0...5000).contains(n) else { return .badValue }
+            return .ok(key == "fade-in" ? .fadeIn(n) : .fadeOut(n))
         case "launch-at-login":
-            switch value {
-            case "on", "yes", "true": return .launchAtLogin(true)
-            case "off", "no", "false": return .launchAtLogin(false)
-            default: return nil
-            }
+            return onOff(value).map { .ok(.launchAtLogin($0)) } ?? .badValue
+        case "bold-first-line":
+            return onOff(value).map { .ok(.autoBoldFirstLine($0)) } ?? .badValue
         default:
-            guard let action = shortcutKeys.first(where: { $0.key == key })?.action,
-                  let sc = ShortcutText.parse(value),
+            guard let action = shortcutKeys.first(where: { $0.key == key })?.action else { return .unknownKey }
+            guard let sc = ShortcutText.parse(value),
                   !sc.modifierFlags.intersection([.command, .control, .option]).isEmpty
-            else { return nil }
-            return .shortcut(action, sc)
+            else { return .badValue }
+            return .ok(.shortcut(action, sc))
         }
     }
 
@@ -94,10 +117,11 @@ enum SettingsText {
         for change in changes {
             switch change {
             case .edge(let e): if s.edge != e { s.edge = e }
-            case .minSize(let n): if s.minDepth != n { s.minDepth = n }
+            case .minWidth(let n): if s.minDepth != n { s.minDepth = n }
             case .fadeIn(let n): if s.slideInMs != n { s.slideInMs = n }
             case .fadeOut(let n): if s.slideOutMs != n { s.slideOutMs = n }
             case .launchAtLogin(let on): if s.launchAtLogin != on { s.launchAtLogin = on }
+            case .autoBoldFirstLine(let on): if s.autoBoldFirstLine != on { s.autoBoldFirstLine = on }
             case .shortcut(let action, let sc): if s.shortcut(for: action) != sc { s.shortcuts[action] = sc }
             }
         }
