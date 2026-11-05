@@ -42,11 +42,10 @@ enum SelfTest {
 
     static func run() -> Never {
         roundTrip()
-        listContinuation()
+        noListContinuation()
         ruleFromDashes()
         lineFormats()
         blockLines()
-        tabs()
         undo()
         images()
         koreanComposition()
@@ -99,20 +98,15 @@ enum SelfTest {
     }
 
     private static func roundTrip() {
-        let md = "a\n**b**\n- **c**\n---\n  - d\n\n- "
+        let md = "a\n**b**\n- c\n---\n  - d\n\n- "
         check("round trip", makeView(md), md)
     }
 
-    private static func listContinuation() {
+    private static func noListContinuation() {
         let tv = makeView()
         type(tv, "- abc")
         tv.insertNewline(nil)
-        check("list continues", tv, "- abc\n- ")
-        tv.insertNewline(nil)
-        check("empty item ends list", tv, "- abc\n")
-        type(tv, "  - x")
-        tv.insertNewline(nil)
-        check("indent kept", tv, "- abc\n  - x\n  - ")
+        check("enter after '- ' line adds nothing", tv, "- abc\n")
     }
 
     private static func ruleFromDashes() {
@@ -127,12 +121,7 @@ enum SelfTest {
         let tv = makeView("- item")
         caret(tv, 3)
         tv.perform(.bold)
-        check("bold list item", tv, "- **item**")
-        let isBold = { (i: Int) in
-            (tv.textStorage!.attribute(.font, at: i, effectiveRange: nil) as! NSFont)
-                .fontDescriptor.symbolicTraits.contains(.bold)
-        }
-        expect("dash stays regular, content bold", !isBold(0) && !isBold(1) && isBold(2))
+        check("bold line includes a leading dash", tv, "**- item**")
         tv.perform(.bold)
         check("bold toggle off", tv, "- item")
         tv.selectAll(nil)
@@ -169,15 +158,6 @@ enum SelfTest {
         caret(mixed, 1)
         mixed.applyEdits([(NSRange(location: 1, length: 0), NoteFormat.attachmentString(RuleAttachment()))])
         check("mixed line is split", mixed, "a\n---\nb")
-    }
-
-    private static func tabs() {
-        let tv = makeView("- a")
-        caret(tv, 3)
-        tv.insertTab(nil)
-        check("tab indents list", tv, "  - a")
-        tv.insertBacktab(nil)
-        check("backtab outdents", tv, "- a")
     }
 
     private static func images() {

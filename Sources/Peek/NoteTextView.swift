@@ -308,43 +308,9 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
                 resetTypingAttributes()
                 return
             }
-            let prefixLen = NoteFormat.listPrefixLength(lineText)
-            if prefixLen > 0 && sel.location >= current.location + prefixLen {
-                if current.length == prefixLen {
-                    // Empty list item ends the list.
-                    applyEdits([(current, plain(""))])
-                } else {
-                    let prefix = String(lineText.utf16.prefix(prefixLen)) ?? "- "
-                    applyEdits([(sel, plain("\n" + prefix))],
-                               selectAfter: NSRange(location: sel.location + 1 + (prefix as NSString).length, length: 0))
-                }
-                resetTypingAttributes()
-                return
-            }
         }
         super.insertNewline(sender)
         resetTypingAttributes()
-    }
-
-    private func listLinesInSelection() -> [NSRange] {
-        lines(in: selectedRange()).filter {
-            kind(of: $0) == .text && NoteFormat.listPrefixLength(text(of: $0)) > 0
-        }
-    }
-
-    override func insertTab(_ sender: Any?) {
-        let listLines = listLinesInSelection()
-        guard !listLines.isEmpty, !hasMarkedText() else { return super.insertTab(sender) }
-        applyEdits(listLines.map { (NSRange(location: $0.location, length: 0), plain("  ")) })
-    }
-
-    override func insertBacktab(_ sender: Any?) {
-        let edits: [(NSRange, NSAttributedString)] = listLinesInSelection().compactMap { line in
-            let spaces = text(of: line).prefix { $0 == " " }.count
-            guard spaces > 0 else { return nil }
-            return (NSRange(location: line.location, length: min(2, spaces)), plain(""))
-        }
-        applyEdits(edits)
     }
 
     override func deleteBackward(_ sender: Any?) {

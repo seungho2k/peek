@@ -18,12 +18,11 @@ enum LineKind: Equatable {
 /// On disk, one line per paragraph:
 ///   `---`                      horizontal rule
 ///   `![](images/a.png)![](…)`  image line (one or more images)
-///   `**text**`, `- **text**`   bold line (list prefix stays regular)
-///   anything else              plain text (a leading `- ` is just text)
+///   `**text**`                 bold line
+///   anything else              plain text
 @MainActor
 enum NoteFormat {
     static let attachmentChar = Character(UnicodeScalar(NSTextAttachment.character)!)
-    static let listPrefix = try! NSRegularExpression(pattern: "^ *- ")
     static let imageRef = try! NSRegularExpression(pattern: #"!\[\]\(images/([^)\s/]+)\)"#)
 
     static var baseAttributes: [NSAttributedString.Key: Any] {
@@ -51,15 +50,12 @@ enum NoteFormat {
             for name in names { s.append(attachmentString(ImageAttachment(name: name))) }
             return s
         }
-        let ns = line as NSString
-        let prefixLen = listPrefixLength(line)
-        let content = ns.substring(from: prefixLen)
-        if content.count >= 5, content.hasPrefix("**"), content.hasSuffix("**") {
-            let inner = String(content.dropFirst(2).dropLast(2))
+        if line.count >= 5, line.hasPrefix("**"), line.hasSuffix("**") {
+            let inner = String(line.dropFirst(2).dropLast(2))
             if !inner.trimmingCharacters(in: .whitespaces).isEmpty {
                 var attrs = baseAttributes
                 attrs[.peekBold] = true
-                return NSAttributedString(string: ns.substring(to: prefixLen) + inner, attributes: attrs)
+                return NSAttributedString(string: inner, attributes: attrs)
             }
         }
         return NSAttributedString(string: line, attributes: baseAttributes)
@@ -83,11 +79,6 @@ enum NoteFormat {
         let s = NSMutableAttributedString(attachment: attachment)
         s.addAttributes(baseAttributes, range: NSRange(location: 0, length: s.length))
         return s
-    }
-
-    static func listPrefixLength(_ line: String) -> Int {
-        let ns = line as NSString
-        return listPrefix.firstMatch(in: line, range: NSRange(location: 0, length: ns.length))?.range.length ?? 0
     }
 
     // MARK: Serialize
@@ -119,12 +110,8 @@ enum NoteFormat {
         case .text:
             let line = (text.string as NSString).substring(with: range)
                 .replacingOccurrences(of: String(attachmentChar), with: "")
-            guard isBold(text, line: range) else { return line }
-            let ns = line as NSString
-            let prefixLen = listPrefixLength(line)
-            let content = ns.substring(from: prefixLen)
-            guard !content.trimmingCharacters(in: .whitespaces).isEmpty else { return line }
-            return ns.substring(to: prefixLen) + "**" + content + "**"
+            guard isBold(text, line: range), !line.trimmingCharacters(in: .whitespaces).isEmpty else { return line }
+            return "**" + line + "**"
         }
     }
 
@@ -194,20 +181,12 @@ enum NoteFormat {
         let full = ns.paragraphRange(for: NSRange(location: start, length: min(range.length, ns.length - start)))
         for line in lineRanges(in: ns, covering: full) {
             let withBreak = NSRange(location: line.location, length: min(line.length + 1, ns.length - line.location))
-            var bold = false
-            var prefixLen = 0
-            if kind(of: storage, line: line) == .text && isBold(storage, line: line) {
-                bold = true
-                prefixLen = listPrefixLength(ns.substring(with: line))
-            }
-            let boldContent = bold ? NSRange(location: line.location + prefixLen, length: line.length - prefixLen) : nil
+            let bold = kind(of: storage, line: line) == .text && isBold(storage, line: line)
 
             ensureColor(storage, withBreak)
-            if let boldContent, boldContent.length > 0 {
-                ensureFont(storage, NSRange(location: line.location, length: prefixLen), bold: false)
-                ensureFont(storage, boldContent, bold: true)
-                let breakRange = NSRange(location: NSMaxRange(line), length: withBreak.length - line.length)
-                ensureFont(storage, breakRange, bold: false)
+            if bold && line.length > 0 {
+                ensureFont(storage, line, bold: true)
+                ensureFont(storage, NSRange(location: NSMaxRange(line), length: withBreak.length - line.length), bold: false)
             } else {
                 ensureFont(storage, withBreak, bold: false)
             }
