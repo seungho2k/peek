@@ -6,6 +6,39 @@ import AppKit
 enum SelfTest {
     private static var failures = 0
 
+    /// Renders an editor with sample content to a PNG: `--render <path>`
+    static func render(to path: String) -> Never {
+        _ = NSApplication.shared
+        let editor = NoteEditor(loadFromDisk: false)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 260, height: 260), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.backgroundColor = Theme.background
+        editor.scrollView.frame = window.contentView!.bounds
+        window.contentView!.addSubview(editor.scrollView)
+        editor.textView.load(markdown: "한글 제목 line\n**굵은 줄**\n- 리스트\n  - 들여쓰기\n---\n마지막\n")
+        editor.refreshLineNumbers()
+        editor.scrollView.tile()
+        window.orderFrontRegardless()
+        window.displayIfNeeded()
+        let view = window.contentView!
+        view.layoutSubtreeIfNeeded()
+        editor.textView.layoutManager!.ensureLayout(for: editor.textView.textContainer!)
+        // Compose: ruler on the left, text view on the right.
+        let tv = editor.textView, ruler = editor.scrollView.verticalRulerView!
+        let size = NSSize(width: ruler.frame.width + tv.frame.width, height: 200)
+        let image = NSImage(size: size)
+        image.lockFocusFlipped(true)
+        Theme.background.setFill(); NSRect(origin: .zero, size: size).fill()
+        for (v, x) in [(ruler as NSView, CGFloat(0)), (tv as NSView, ruler.frame.width)] {
+            let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds)!
+            v.cacheDisplay(in: v.bounds, to: rep)
+            rep.draw(in: NSRect(x: x, y: 0, width: v.bounds.width, height: v.bounds.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        }
+        image.unlockFocus()
+        let tiff = image.tiffRepresentation!
+        try? NSBitmapImageRep(data: tiff)!.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: path))
+        exit(0)
+    }
+
     static func run() -> Never {
         roundTrip()
         listContinuation()

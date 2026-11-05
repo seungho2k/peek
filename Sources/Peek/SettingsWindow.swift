@@ -30,6 +30,7 @@ struct SettingsView: View {
                     ForEach(PeekEdge.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                numberRow(settings.edge.isSide ? "최소 너비" : "최소 높이", unit: "pt", value: $settings.minDepth, range: 100...3000)
                 numberRow("숨김 여백", unit: "pt", value: $settings.hideMargin, range: 0...1000)
             }
 

@@ -25,9 +25,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let delay = Double(ProcessInfo.processInfo.environment["PEEK_FOCUS_PROBE"] ?? "") ?? 0.5
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             report("before show")
-            self.panelController.show()
+            if ProcessInfo.processInfo.environment["PEEK_PIN"] != nil {
+                self.panelController.hotKeyPressed()
+            } else {
+                self.panelController.show()
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                 report("shown")
+                if ProcessInfo.processInfo.environment["PEEK_MC_TEST"] != nil {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Mission Control.app"))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        report("during mission control")
+                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Mission Control.app"))
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { exit(0) }
+                    }
+                    return
+                }
                 self.panelController.hide()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                     report("hidden")

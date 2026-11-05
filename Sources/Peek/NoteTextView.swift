@@ -4,7 +4,6 @@ import AppKit
 /// bold as a whole), a horizontal rule, or a row of images. Rule/image lines ("block
 /// lines") never contain text — typing on them moves to a new line.
 final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDelegate {
-    var onPinToggle: (() -> Void)?
     var onOpenSettings: (() -> Void)?
 
     /// Character range edited since the last block normalization pass.
@@ -479,7 +478,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         case .bold: toggleBold()
         case .list: toggleList()
         case .rule: insertRule()
-        case .pin: onPinToggle?()
+        case .pin: break  // global hotkey, handled by PanelController
         case .settings: onOpenSettings?()
         }
     }

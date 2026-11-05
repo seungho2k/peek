@@ -34,6 +34,16 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
 
+        scrollView.verticalRulerView = LineNumberRuler(textView: textView, scrollView: scrollView)
+        scrollView.hasVerticalRuler = true
+        scrollView.rulersVisible = true
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshLineNumbers() }
+        }
+
         if loadFromDisk { reload() }
     }
 
@@ -42,6 +52,7 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
         let markdown = store.load()
         textView.load(markdown: markdown)
         isDirty = false
+        refreshLineNumbers()
     }
 
     func saveNow() {
@@ -64,5 +75,10 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
 
     func textDidChange(_ notification: Notification) {
         scheduleSave()
+        refreshLineNumbers()
+    }
+
+    func refreshLineNumbers() {
+        scrollView.verticalRulerView?.needsDisplay = true
     }
 }

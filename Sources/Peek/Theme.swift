@@ -45,6 +45,12 @@ enum Theme {
 
     static let imageGap: CGFloat = 4
 
+    /// Line numbers: barely visible.
+    static let lineNumber = dynamic(
+        light: NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.16),
+        dark: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.16)
+    )
+
     /// Close button glyph (faint) and its hover background.
     static let closeGlyph = dynamic(
         light: NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.35),

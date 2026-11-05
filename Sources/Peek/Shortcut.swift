@@ -38,7 +38,7 @@ enum KeyCode {
     static let a: UInt16 = 0, b: UInt16 = 11, c: UInt16 = 8, h: UInt16 = 4, j: UInt16 = 38, k: UInt16 = 40, l: UInt16 = 37
     static let p: UInt16 = 35, q: UInt16 = 12, v: UInt16 = 9, x: UInt16 = 7, z: UInt16 = 6
     static let zero: UInt16 = 29, one: UInt16 = 18, two: UInt16 = 19, three: UInt16 = 20
-    static let returnKey: UInt16 = 36, comma: UInt16 = 43, escape: UInt16 = 53
+    static let space: UInt16 = 49, returnKey: UInt16 = 36, comma: UInt16 = 43, escape: UInt16 = 53
 }
 
 enum KeyNames {

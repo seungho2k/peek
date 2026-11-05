@@ -54,12 +54,13 @@ final class ResizeHandle: NSView {
     }
 }
 
-/// Faint circular × button. Transparent background, slightly darker on hover; fades in/out.
-final class CloseButton: NSView {
-    static let size: CGFloat = 24
+/// Close strip along the screen edge, shown when the panel fills the screen: a faint ×
+/// centered in a thin full-length bar. Transparent; slightly darker on hover; fades in/out.
+final class CloseStrip: NSView {
+    static let thickness: CGFloat = 28
     var onClick: (() -> Void)?
     private var hovering = false { didSet { needsDisplay = true } }
-    private var shown = false
+    private(set) var shown = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -104,7 +105,7 @@ final class CloseButton: NSView {
     override func draw(_ dirtyRect: NSRect) {
         if hovering {
             Theme.closeHover.setFill()
-            NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1)).fill()
+            bounds.fill()
         }
         let r: CGFloat = 4
         let c = NSPoint(x: bounds.midX, y: bounds.midY)

@@ -24,7 +24,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         case .bold: "굵게"
         case .list: "리스트"
         case .rule: "수평선"
-        case .pin: "pin 토글"
+        case .pin: "peek 열고 pin (전역)"
         case .settings: "설정 열기"
         }
     }
@@ -34,7 +34,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         case .bold: Shortcut(keyCode: KeyCode.b, modifiers: .command)
         case .list: Shortcut(keyCode: KeyCode.l, modifiers: .command)
         case .rule: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
-        case .pin: Shortcut(keyCode: KeyCode.p, modifiers: .command)
+        case .pin: Shortcut(keyCode: KeyCode.space, modifiers: .option)
         case .settings: Shortcut(keyCode: KeyCode.comma, modifiers: .command)
         }
     }
@@ -48,7 +48,6 @@ final class Settings: ObservableObject {
 
     static let defaultSideWidth: CGFloat = 360
     static let defaultBottomHeight: CGFloat = 320
-    static let minPanelLength: CGFloat = 200
 
     @Published var edge: PeekEdge {
         didSet { defaults.set(edge.rawValue, forKey: "edge") }
@@ -69,6 +68,10 @@ final class Settings: ObservableObject {
     @Published var bottomHeight: CGFloat {
         didSet { defaults.set(Double(bottomHeight), forKey: "bottomHeight") }
     }
+    /// Smallest panel width (left/right) or height (bottom), in pt.
+    @Published var minDepth: Double {
+        didSet { defaults.set(minDepth, forKey: "minDepth") }
+    }
     /// Extra distance (pt) past the panel's inner edge before it slides away.
     @Published var hideMargin: Double {
         didSet { defaults.set(hideMargin, forKey: "hideMargin") }
@@ -88,6 +91,7 @@ final class Settings: ObservableObject {
         slideInMs = defaults.object(forKey: "slideInMs") as? Double ?? 150
         slideOutMs = defaults.object(forKey: "slideOutMs") as? Double ?? 120
         hideMargin = defaults.object(forKey: "hideMargin") as? Double ?? 40
+        minDepth = defaults.object(forKey: "minDepth") as? Double ?? 200
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
         bottomHeight = CGFloat(defaults.object(forKey: "bottomHeight") as? Double ?? Double(Self.defaultBottomHeight))
 
@@ -97,11 +101,14 @@ final class Settings: ObservableObject {
             for (k, v) in stored { if let a = ShortcutAction(rawValue: k) { sc[a] = v } }
         }
         // v1 defaults were ⌘1/⌘2/⌘3; move untouched ones to the current defaults.
-        if defaults.integer(forKey: "shortcutsVersion") < 2 {
+        let version = defaults.integer(forKey: "shortcutsVersion")
+        if version < 2 {
             let v1: [ShortcutAction: UInt16] = [.bold: KeyCode.two, .list: KeyCode.three]
             for (a, key) in v1 where sc[a] == Shortcut(keyCode: key, modifiers: .command) { sc[a] = nil }
-            defaults.set(2, forKey: "shortcutsVersion")
         }
+        // v2 had an in-panel ⌘P pin toggle; pin is now a global ⌥Space hotkey.
+        if version < 3, sc[.pin] == Shortcut(keyCode: KeyCode.p, modifiers: .command) { sc[.pin] = nil }
+        defaults.set(3, forKey: "shortcutsVersion")
         for a in ShortcutAction.allCases where sc[a] == nil { sc[a] = a.defaultShortcut }
         shortcuts = sc
 
@@ -112,8 +119,9 @@ final class Settings: ObservableObject {
         shortcuts[action] ?? action.defaultShortcut
     }
 
+    /// In-panel shortcut for a key event. The pin shortcut is a global hotkey, handled elsewhere.
     func action(matching event: NSEvent) -> ShortcutAction? {
-        ShortcutAction.allCases.first { shortcut(for: $0).matches(event) }
+        ShortcutAction.allCases.first { $0 != .pin && shortcut(for: $0).matches(event) }
     }
 
     func resetShortcuts() {

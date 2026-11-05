@@ -9,7 +9,10 @@ final class PanelController: NSObject {
     let editor: NoteEditor
     private let settings = Settings.shared
     private let resizeHandle = ResizeHandle()
-    private let closeButton = CloseButton()
+    private let closeStrip = CloseStrip()
+    private let hotKey = GlobalHotKey()
+    /// While the panel is visible: hides it if Mission Control opens.
+    private var overlayWatchTimer: Timer?
 
     /// 0 = fully hidden, 1 = fully shown.
     private var progress: CGFloat = 0
@@ -49,7 +52,8 @@ final class PanelController: NSObject {
         observeSettings()
         observeActivation()
 
-        editor.textView.onPinToggle = { [weak self] in self?.togglePin() }
+        hotKey.onPress = { [weak self] in self?.hotKeyPressed() }
+        hotKey.register(settings.shortcut(for: .pin))
         editor.textView.onOpenSettings = { [weak self] in self?.onOpenSettings?() }
 
         #if DEBUG
@@ -80,8 +84,8 @@ final class PanelController: NSObject {
         content.addSubview(resizeHandle)
 
         // Shown only when the panel fills the screen, since the mouse can't leave it then.
-        closeButton.onClick = { [weak self] in self?.closeFromButton() }
-        content.addSubview(closeButton)
+        closeStrip.onClick = { [weak self] in self?.closeFromButton() }
+        content.addSubview(closeStrip)
         layoutContent()
         panel.initialFirstResponder = editor.textView
         panel.makeFirstResponder(editor.textView)
@@ -90,9 +94,23 @@ final class PanelController: NSObject {
     private func layoutContent() {
         guard let content = panel.contentView else { return }
         content.frame = NSRect(origin: .zero, size: panel.frame.size)
-        editor.scrollView.frame = content.bounds
         let t = Self.handleThickness
         let b = content.bounds
+
+        // When full, a close strip runs along the screen edge and the text area gives way.
+        let s = isFull ? CloseStrip.thickness : 0
+        switch settings.edge {
+        case .right:
+            editor.scrollView.frame = NSRect(x: 0, y: 0, width: b.width - s, height: b.height)
+            closeStrip.frame = NSRect(x: b.width - CloseStrip.thickness, y: 0, width: CloseStrip.thickness, height: b.height)
+        case .left:
+            editor.scrollView.frame = NSRect(x: s, y: 0, width: b.width - s, height: b.height)
+            closeStrip.frame = NSRect(x: 0, y: 0, width: CloseStrip.thickness, height: b.height)
+        case .bottom:
+            editor.scrollView.frame = NSRect(x: 0, y: s, width: b.width, height: b.height - s)
+            closeStrip.frame = NSRect(x: 0, y: 0, width: b.width, height: CloseStrip.thickness)
+        }
+        closeStrip.setShown(isFull)
         switch settings.edge {
         case .right:
             resizeHandle.frame = NSRect(x: 0, y: 0, width: t, height: b.height)
@@ -106,12 +124,15 @@ final class PanelController: NSObject {
         }
         resizeHandle.edge = settings.edge
 
-        let size = CloseButton.size, inset: CGFloat = 8
-        closeButton.frame = NSRect(x: b.width - inset - size, y: b.height - inset - size, width: size, height: size)
-        closeButton.autoresizingMask = [.minXMargin, .minYMargin]
     }
 
     private func observeSettings() {
+        settings.$shortcuts.dropFirst().sink { [weak self] shortcuts in
+            DispatchQueue.main.async { self?.hotKey.register(shortcuts[.pin] ?? ShortcutAction.pin.defaultShortcut) }
+        }.store(in: &cancellables)
+        settings.$minDepth.dropFirst().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.applyFrame() }
+        }.store(in: &cancellables)
         settings.$edge.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async { self?.edgeChanged() }
         }.store(in: &cancellables)
@@ -168,7 +189,7 @@ final class PanelController: NSObject {
     }
 
     private func clampDepth(_ value: CGFloat, on screen: NSScreen) -> CGFloat {
-        min(max(value, Settings.minPanelLength), maxDepth(on: screen)).rounded()
+        min(max(value, CGFloat(settings.minDepth)), maxDepth(on: screen)).rounded()
     }
 
     private var isFull: Bool {
@@ -196,7 +217,7 @@ final class PanelController: NSObject {
             layoutContent()
         }
         panel.alphaValue = progress
-        closeButton.setShown(isFull)
+        if closeStrip.shown != isFull { layoutContent() }
     }
 
     private func isAtEdge(_ p: NSPoint, of screen: NSScreen) -> Bool {
@@ -327,7 +348,27 @@ final class PanelController: NSObject {
             applyFrame()
             panel.orderFrontRegardless()
         }
+        startOverlayWatch()
         animate(to: 1)
+    }
+
+    /// Mission Control gives no notification; while visible, check a few times a second.
+    private func startOverlayWatch() {
+        guard overlayWatchTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, SystemState.isDockOverlayActive() else { return }
+                self.isPinned = false
+                self.hideImmediately()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        overlayWatchTimer = timer
+    }
+
+    private func stopOverlayWatch() {
+        overlayWatchTimer?.invalidate()
+        overlayWatchTimer = nil
     }
 
     func hide() {
@@ -343,12 +384,23 @@ final class PanelController: NSObject {
         progress = 0
         returnFocus()
         panel.orderOut(nil)
+        stopOverlayWatch()
         editor.saveNow()
     }
 
     private func closeFromButton() {
         isPinned = false
         hide()
+    }
+
+    /// Global hotkey: open + pin without taking focus; when already pinned, unpin.
+    func hotKeyPressed() {
+        if target == 0 {
+            isPinned = true
+            show()
+        } else {
+            togglePin()
+        }
     }
 
     func togglePin() {
@@ -398,6 +450,7 @@ final class PanelController: NSObject {
     private func finishAnimation() {
         if target == 0 {
             panel.orderOut(nil)
+            stopOverlayWatch()
             editor.saveNow()
         }
     }
