@@ -7,10 +7,7 @@ import Quartz
 final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDelegate {
     var onOpenSettings: (() -> Void)?
 
-    /// Never show line numbers in this view (the settings panel); otherwise follow the setting.
-    var hidesLineNumbers = false
-    var lineNumberMode: LineNumberMode { hidesLineNumbers ? .off : Theme.lineNumberMode }
-    var baseAttributes: [NSAttributedString.Key: Any] { NoteFormat.baseAttributes(lineNumbers: lineNumberMode) }
+    var baseAttributes: [NSAttributedString.Key: Any] { NoteFormat.baseAttributes }
     var onToggleFill: (() -> Void)?
 
     /// Quick Look state (see NoteTextView+QuickLook).
@@ -95,16 +92,15 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// Image and rule lines are not counted; numbering restarts at 00 after every rule.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
-        guard lineNumberMode == .left else { return }  // outside: drawn by LineNumberOverlay
         let right = textContainerOrigin.x + Theme.gutterWidth - Theme.spaceWidth
         enumerateLineNumbers(in: rect) { number, labelTop in
             LineNumberLabel.draw(number, rightEdge: right, top: labelTop)
         }
     }
 
-    /// Calls `body` for each line intersecting `rect` (view coordinates) with its number and the
-    /// top y of its label (baseline-aligned on text lines). Every line counts — text, rules and
-    /// image rows — from 00.
+    /// Calls `body` for each numbered line intersecting `rect` (view coordinates) with its number
+    /// and the top y of its label, baseline-aligned with the line's text. Only text lines are
+    /// numbered; numbering starts at 00 at the top and again after every rule.
     func enumerateLineNumbers(in rect: NSRect, _ body: (Int, CGFloat) -> Void) {
         guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
         let ns = storage.string as NSString
@@ -120,10 +116,15 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         var index = 0
         while index < ns.length {
             let paragraph = ns.paragraphRange(for: NSRange(location: index, length: 0))
-            let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
-            if frag.minY + originY > rect.maxY { return }
-            emit(number, frag.minY)
-            number += 1
+            let attachment = storage.attribute(.attachment, at: index, effectiveRange: nil)
+            if attachment is RuleAttachment {
+                number = 0  // each rule starts a new section
+            } else if attachment == nil {
+                let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
+                if frag.minY + originY > rect.maxY { return }
+                emit(number, frag.minY)
+                number += 1
+            }
             index = NSMaxRange(paragraph)
         }
         if lm.extraLineFragmentTextContainer === tc {
@@ -162,7 +163,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         range editedRange: NSRange, changeInLength delta: Int
     ) {
         MainActor.assumeIsolated {
-            NoteFormat.restyle(textStorage, range: editedRange, lineNumbers: lineNumberMode)
+            NoteFormat.restyle(textStorage, range: editedRange)
             lastEditedRange = editedRange
             if editedMask.contains(.editedCharacters) {
                 pendingNormalizeRange = pendingNormalizeRange.map {

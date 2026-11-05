@@ -25,10 +25,8 @@ enum NoteFormat {
     static let attachmentChar = Character(UnicodeScalar(NSTextAttachment.character)!)
     static let imageRef = try! NSRegularExpression(pattern: #"!\[\]\(images/([^)\s/]+)\)"#)
 
-    static var baseAttributes: [NSAttributedString.Key: Any] { baseAttributes(lineNumbers: Theme.lineNumberMode) }
-
-    static func baseAttributes(lineNumbers: LineNumberMode) -> [NSAttributedString.Key: Any] {
-        [.font: Theme.font, .foregroundColor: Theme.text, .paragraphStyle: Theme.textParagraph(lineNumbers: lineNumbers)]
+    static var baseAttributes: [NSAttributedString.Key: Any] {
+        [.font: Theme.font, .foregroundColor: Theme.text, .paragraphStyle: Theme.textParagraph]
     }
 
     // MARK: Parse
@@ -243,7 +241,7 @@ enum NoteFormat {
     /// unconditionally would throw the caret to the end of the line mid-composition.
     /// Fonts are compared by size and weight only, so fallback fonts that AppKit substitutes
     /// (e.g. Apple SD Gothic Neo for Hangul) are left alone.
-    static func restyle(_ storage: NSTextStorage, range: NSRange, lineNumbers: LineNumberMode = Theme.lineNumberMode) {
+    static func restyle(_ storage: NSTextStorage, range: NSRange) {
         let ns = storage.string as NSString
         guard ns.length > 0 else { return }
         let start = min(range.location, ns.length)
@@ -255,7 +253,7 @@ enum NoteFormat {
 
             ensureColor(storage, withBreak)
             ensureParagraph(storage, withBreak, kind(of: storage, line: line) == .text
-                ? Theme.textParagraph(lineNumbers: lineNumbers) : Theme.blockParagraph(lineNumbers: lineNumbers))
+                ? Theme.textParagraph : Theme.blockParagraph)
             if bold && line.length > 0 {
                 ensureFont(storage, line, bold: true)
                 ensureFont(storage, NSRange(location: NSMaxRange(line), length: withBreak.length - line.length), bold: false)

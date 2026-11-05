@@ -13,12 +13,6 @@ enum PeekEdge: String, CaseIterable, Identifiable {
     }
 }
 
-/// Where line numbers go. `outside`: just outside the note (beside its inner edge), with no
-/// background; the note has no gutter. `left`: in a gutter the text is indented past.
-enum LineNumberMode: String, CaseIterable {
-    case left, outside, off
-}
-
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
     case bold, rule, fill, pin, settings
     var id: String { rawValue }
@@ -67,10 +61,6 @@ final class Settings: ObservableObject {
     @Published var sideWidth: CGFloat {
         didSet { defaults.set(Double(sideWidth), forKey: "sideWidth") }
     }
-    /// Line number placement (note only; the settings view never shows them).
-    @Published var lineNumbers: LineNumberMode {
-        didSet { defaults.set(lineNumbers.rawValue, forKey: "lineNumbers") }
-    }
     /// Line 00 of every section is shown in bold.
     @Published var autoBoldFirstLine: Bool {
         didSet { defaults.set(autoBoldFirstLine, forKey: "autoBoldFirstLine") }
@@ -99,15 +89,7 @@ final class Settings: ObservableObject {
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
         defaults.removeObject(forKey: "bottomHeight")  // bottom edge removed
         autoBoldFirstLine = defaults.object(forKey: "autoBoldFirstLine") as? Bool ?? true
-        // Older builds stored on/off or the dropped "right" mode; both now mean outside.
-        if let mode = LineNumberMode(rawValue: defaults.string(forKey: "lineNumbers") ?? "") {
-            lineNumbers = mode
-        } else {
-            let wasOn = defaults.string(forKey: "lineNumbers") == "right"
-                || (defaults.object(forKey: "showLineNumbers") as? Bool ?? true)
-            lineNumbers = wasOn ? .outside : .off
-        }
-        defaults.removeObject(forKey: "showLineNumbers")
+        for old in ["showLineNumbers", "lineNumbers"] { defaults.removeObject(forKey: old) }  // settings removed
 
         var sc: [ShortcutAction: Shortcut] = [:]
         if let data = defaults.data(forKey: "shortcuts"),

@@ -14,9 +14,6 @@ enum SelfTest {
         window.backgroundColor = Theme.background
         editor.scrollView.frame = window.contentView!.bounds
         window.contentView!.addSubview(editor.scrollView)
-        if let mode = LineNumberMode(rawValue: ProcessInfo.processInfo.environment["PEEK_LINE_NUMBERS"] ?? "") {
-            Theme.lineNumberMode = mode
-        }
         let sample = ProcessInfo.processInfo.environment["PEEK_RENDER_TEXT"]?.replacingOccurrences(of: "\\n", with: "\n")
         editor.textView.load(markdown: sample ?? "한글 제목 line\n**굵은 줄**\n- 리스트\n  - 들여쓰기\n---\n마지막\n")
         editor.scrollView.tile()
@@ -416,7 +413,7 @@ enum SelfTest {
     private static func settingsText() {
         let formatted = SettingsText.format(Settings.shared)
         let (changes, invalid) = SettingsText.parse(formatted)
-        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 12)
+        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 11)
 
         for (text, code, mods) in [("cmd+-", KeyCode.minus, NSEvent.ModifierFlags.command),
                                    ("opt+space", KeyCode.space, .option),
