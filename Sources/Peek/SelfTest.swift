@@ -14,6 +14,7 @@ enum SelfTest {
         blockLines()
         tabs()
         undo()
+        images()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -139,6 +140,86 @@ enum SelfTest {
         check("tab indents list", tv, "  - a")
         tv.insertBacktab(nil)
         check("backtab outdents", tv, "- a")
+    }
+
+    private static func images() {
+        let a = "![](images/a.png)", b = "![](images/b.png)", c = "![](images/c.png)"
+
+        let empty = makeView("")
+        empty.insertImages(["a.png"])
+        check("image fills empty line", empty, a)
+
+        let text = makeView("abc")
+        caret(text, 1)
+        text.insertImages(["b.png", "c.png"])
+        check("image on text line goes below", text, "abc\n\(b)\(c)")
+
+        let row = makeView(a)
+        caret(row, 1)
+        row.insertImages(["b.png"])
+        check("image joins row", row, a + b)
+        caret(row, 0)
+        row.insertImages(["c.png"])
+        check("image joins row on the left", row, c + a + b)
+
+        let typing = makeView(a)
+        caret(typing, 1)
+        type(typing, "hi")
+        check("typing on image line goes below", typing, "\(a)\nhi")
+
+        let atStart = makeView(a)
+        caret(atStart, 0)
+        type(atStart, "hi")
+        check("typing at image line start goes above", atStart, "hi\n\(a)")
+
+        let back = makeView("\(a)\ntext")
+        caret(back, 2)
+        back.deleteBackward(nil)
+        check("backspace doesn't merge text into image line", back, "\(a)\ntext")
+        expect("backspace moves caret to image line end", back.selectedRange().location == 1)
+
+        let enter = makeView(a)
+        caret(enter, 1)
+        enter.insertNewline(nil)
+        type(enter, "x")
+        check("enter on image line opens line below", enter, "\(a)\nx")
+
+        let copy = makeView("x\n\(a)\(b)\n**y**")
+        copy.selectAll(nil)
+        let pb = NSPasteboard(name: NSPasteboard.Name("peek.selftest"))
+        pb.clearContents()
+        _ = copy.writeSelection(to: pb, types: copy.writablePasteboardTypes)
+        let paste = makeView("")
+        _ = paste.readSelection(from: pb, type: .peekNote)
+        check("copy/paste round trip", paste, "x\n\(a)\(b)\n**y**")
+        expect("rtfd written", pb.data(forType: .rtfd) != nil)
+        pb.releaseGlobally()
+
+        // Justified row: equal heights, total width fills the line.
+        let names = ["selftest-wide.png", "selftest-square.png"]
+        for (name, size) in zip(names, [NSSize(width: 200, height: 100), NSSize(width: 100, height: 100)]) {
+            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
+                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                       colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            try? rep.representation(using: .png, properties: [:])!.write(to: NoteStore.shared.imageURL(named: name))
+        }
+        let layout = makeView("![](images/\(names[0]))![](images/\(names[1]))")
+        let lm = layout.layoutManager!, tc = layout.textContainer!
+        lm.ensureLayout(for: tc)
+        let r0 = lm.boundingRect(forGlyphRange: NSRange(location: 0, length: 1), in: tc)
+        let r1 = lm.boundingRect(forGlyphRange: NSRange(location: 1, length: 1), in: tc)
+        let usable = usableLineWidth(tc)
+        print("     row: \(r0) \(r1) usable=\(usable)")
+        expect("row images share height", abs(r0.height - r1.height) < 1)
+        expect("row on one line", abs(r0.minY - r1.minY) < 1)
+        expect("row fills width", r1.maxX - r0.minX > usable - 4 && r1.maxX - r0.minX <= usable + 1)
+        expect("aspect kept", abs(r0.width / r1.width - 2) < 0.1)
+        for name in names { try? FileManager.default.removeItem(at: NoteStore.shared.imageURL(named: name)) }
+
+        let mixed = makeView("ab")
+        caret(mixed, 1)
+        mixed.insertFragment(NoteFormat.parse("1\n\(a)\n2"))
+        check("pasted mix keeps images on own line", mixed, "a1\n\(a)\n2b")
     }
 
     private static func undo() {

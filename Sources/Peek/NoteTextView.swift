@@ -43,6 +43,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
         writingToolsBehavior = .none
 
         textStorage?.delegate = self
+        updateDragTypeRegistration()
     }
 
     // MARK: Load / save

@@ -187,7 +187,6 @@ enum NoteFormat {
         for line in lineRanges(in: ns, covering: full) {
             let withBreak = NSRange(location: line.location, length: min(line.length + 1, ns.length - line.location))
             storage.addAttributes(baseAttributes, range: withBreak)
-            storage.removeAttribute(.kern, range: withBreak)
             if NSMaxRange(line) < ns.length {
                 storage.removeAttribute(.peekBold, range: NSRange(location: NSMaxRange(line), length: 1))
             }
@@ -197,9 +196,6 @@ enum NoteFormat {
                 storage.removeAttribute(.peekBold, range: line)
             case .images:
                 storage.removeAttribute(.peekBold, range: line)
-                if line.length > 1 {
-                    storage.addAttribute(.kern, value: Theme.imageGap, range: NSRange(location: line.location, length: line.length - 1))
-                }
             case .text:
                 guard isBold(storage, line: line) else { continue }
                 storage.addAttribute(.peekBold, value: true, range: line)

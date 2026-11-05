@@ -107,20 +107,25 @@ final class ImageCell: NSTextAttachmentCell {
               let storage = textContainer.layoutManager?.textStorage
         else { return NSRect(origin: .zero, size: cellSize()) }
 
+        let row = Self.row(in: storage, at: charIndex)
+        let available = usableLineWidth(textContainer) - Theme.imageGap * CGFloat(max(row.count - 1, 0))
+        let height = max(1, floor(available / max(row.aspects, 0.01)))
+        // Every image but the last carries the gap to its right inside its own cell.
+        let gap = charIndex == row.lastIndex ? 0 : Theme.imageGap
+        return NSRect(x: 0, y: 0, width: floor(height * me.aspect) + gap, height: height)
+    }
+
+    private static func row(in storage: NSTextStorage, at charIndex: Int) -> (count: Int, aspects: CGFloat, lastIndex: Int) {
         let line = (storage.string as NSString).paragraphRange(for: NSRange(location: charIndex, length: 0))
-        var aspects: CGFloat = 0
-        var count = 0
+        var aspects: CGFloat = 0, count = 0, last = charIndex
         storage.enumerateAttribute(.attachment, in: line) { value, r, _ in
             if let img = value as? ImageAttachment {
                 aspects += img.aspect * CGFloat(r.length)
                 count += r.length
+                last = NSMaxRange(r) - 1
             }
         }
-        count = max(count, 1)
-        let available = usableLineWidth(textContainer) - Theme.imageGap * CGFloat(count - 1)
-        let height = max(1, floor(available / max(aspects, 0.01)))
-        let width = floor(height * me.aspect)
-        return NSRect(x: 0, y: 0, width: width, height: height)
+        return (count, aspects, last)
     }
 
     override func cellSize() -> NSSize { NSSize(width: 100, height: 75) }
@@ -135,7 +140,11 @@ final class ImageCell: NSTextAttachmentCell {
         withFrame cellFrame: NSRect, in controlView: NSView?,
         characterIndex charIndex: Int, layoutManager: NSLayoutManager
     ) {
-        drawImage(in: cellFrame, controlView: controlView, characterIndex: charIndex)
+        var frame = cellFrame
+        if let storage = layoutManager.textStorage, charIndex != Self.row(in: storage, at: charIndex).lastIndex {
+            frame.size.width -= Theme.imageGap
+        }
+        drawImage(in: frame, controlView: controlView, characterIndex: charIndex)
     }
 
     private func drawImage(in frame: NSRect, controlView: NSView?, characterIndex: Int?) {
