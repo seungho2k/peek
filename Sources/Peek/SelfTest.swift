@@ -425,11 +425,11 @@ enum SelfTest {
             if let sc { expect("format \(text)", ShortcutText.format(sc) == text) }
         }
 
-        let sample = "preferences\n---\nedge\nmiddle\n\nmin-width\n50\n---\nfoo\nbar\n\nbold\nb\n\nfade-in\n90\n---\nrule\ncmd+k\n\nfill\ncmd+k\n\nfade-out"
+        let sample = "**preferences**\n\nedge:\nmiddle\n\nmin-width:\n50\n---\n**animations**\n\nfoo:\nbar\n\nbold\nb\n\nfade-in:\n90\n---\nshortcuts\n\nrule:\ncmd+k\n\nfill:\ncmd+k\n\nfade-out:"
         let bad = SettingsText.parse(sample)
-        // lines: 0 preferences | 2 edge 3 middle, 5 min-width 6 50 | 8 foo 9 bar, 11 bold 12 b,
-        // 14 fade-in 15 90 | 17 rule 18 cmd+k, 20 fill 21 cmd+k, 23 fade-out (no value)
-        expect("bad lines flagged (\(bad.invalid.sorted()))", bad.invalid == [3, 8, 12, 18, 21, 23])
+        // lines: 0 title | 2 edge 3 middle | 5 min-width 6 50 || 8 title | 10 foo 11 bar | 13 bold 14 b |
+        // 16 fade-in 17 90 || 19 title | 21 rule 22 cmd+k | 24 fill 25 cmd+k | 27 fade-out (no value)
+        expect("bad lines flagged (\(bad.invalid.sorted()))", bad.invalid == [3, 10, 14, 22, 25, 27])
         expect("good lines applied; min-width below 80 becomes 80", bad.changes == [.minWidth(80), .fadeIn(90)])
     }
 

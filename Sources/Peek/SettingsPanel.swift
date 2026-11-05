@@ -94,8 +94,9 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
     /// Draws the panel content (with one invalid value) for visual checks.
     func debugRender(to path: String) {
         load()
-        // "preferences" + rule + "edge" + "right": make the edge value invalid.
-        let valueEnd = ("preferences\n-\nedge\nright" as NSString).length
+        // Make the edge value invalid.
+        let edgeValue = (textView.string as NSString).range(of: "edge:\n" + settings.edge.rawValue)
+        let valueEnd = NSMaxRange(edgeValue)
         textView.setSelectedRange(NSRange(location: valueEnd, length: 0))
         textView.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
         let size = NSSize(width: CGFloat(settings.minDepth), height: 520)

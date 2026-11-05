@@ -1,39 +1,41 @@
 import AppKit
 
-/// The settings as editable text: a title section, then one section per setting, separated by
-/// rules — the key on line 00 and its value on line 01:
+/// The settings as editable text. Rule-separated blocks, each starting with a bold title;
+/// inside a block, items are separated by blank lines — a `key:` line, then its value:
 ///
-///     preferences
-///     ---
-///     edge
+///     **preferences**
+///
+///     edge:
 ///     right
-///     ---
-///     min-width
+///
+///     min-width:
 ///     200
 ///     ---
+///     **animations**
 ///     …
 @MainActor
 enum SettingsText {
-    static let title = "preferences"
-
     private static let shortcutKeys: [(key: String, action: ShortcutAction)] = [
         ("toggle", .pin), ("bold", .bold), ("rule", .rule), ("fill", .fill), ("settings", .settings),
     ]
 
-    /// Related settings share a block (rule-separated); items in a block are separated by a
-    /// blank line, each as a key line followed by its value line.
     static func format(_ s: Settings) -> String {
-        let blocks: [[(String, String)]] = [
-            [("edge", s.edge.rawValue), ("min-width", "\(Int(s.minDepth))")],
-            [("fade-in", "\(Int(s.slideInMs))"), ("fade-out", "\(Int(s.slideOutMs))")],
-            [("launch-at-login", s.launchAtLogin ? "on" : "off"),
-             ("bold-first-line", s.autoBoldFirstLine ? "on" : "off")],
-            shortcutKeys.map { ($0.key, ShortcutText.format(s.shortcut(for: $0.action))) },
+        let blocks: [(title: String, items: [(String, String)])] = [
+            ("preferences", [
+                ("edge", s.edge.rawValue),
+                ("min-width", "\(Int(s.minDepth))"),
+                ("launch-at-login", s.launchAtLogin ? "on" : "off"),
+                ("bold-first-line", s.autoBoldFirstLine ? "on" : "off"),
+            ]),
+            ("animations", [
+                ("fade-in", "\(Int(s.slideInMs))"),
+                ("fade-out", "\(Int(s.slideOutMs))"),
+            ]),
+            ("keyboard shortcuts", shortcutKeys.map { ($0.key, ShortcutText.format(s.shortcut(for: $0.action))) }),
         ]
-        // Keys are bold when bold-first-line is on, like headings typed in the note.
-        let b = { (t: String) in s.autoBoldFirstLine ? "**\(t)**" : t }
-        let body = blocks.map { block in block.map { "\(b($0.0))\n\($0.1)" }.joined(separator: "\n\n") }
-        return ([b(title)] + body).joined(separator: "\n---\n")
+        return blocks.map { block in
+            (["**\(block.title)**"] + block.items.map { "\($0.0):\n\($0.1)" }).joined(separator: "\n\n")
+        }.joined(separator: "\n---\n")
     }
 
     enum Change: Equatable {
@@ -49,19 +51,21 @@ enum SettingsText {
     /// Parses the sections; `invalid` holds indices of lines that couldn't be applied
     /// (unknown key, missing/bad value, or a shortcut used twice).
     static func parse(_ text: String) -> (changes: [Change], invalid: Set<Int>) {
-        // Items: runs of non-empty lines, split by blank lines and rules. The first block
-        // (everything before the first rule) is the title and isn't parsed.
+        // Items: runs of non-empty lines, split by blank lines and rules. The first item of
+        // each block is its title and isn't parsed.
         let lines = text.components(separatedBy: "\n")
         var sections: [[(index: Int, text: String)]] = []
         var current: [(index: Int, text: String)] = []
-        var inTitle = true
+        var expectingTitle = true
         func flush() {
-            if !current.isEmpty && !inTitle { sections.append(current) }
+            if !current.isEmpty {
+                if expectingTitle { expectingTitle = false } else { sections.append(current) }
+            }
             current = []
         }
         for (i, raw) in lines.enumerated() {
             let line = raw.trimmingCharacters(in: .whitespaces)
-            if line == "---" { flush(); inTitle = false; continue }
+            if line == "---" { flush(); expectingTitle = true; continue }
             if line.isEmpty { flush(); continue }
             // A bold line is saved as **…**; read the text inside.
             let plain = line.count >= 4 && line.hasPrefix("**") && line.hasSuffix("**") ? String(line.dropFirst(2).dropLast(2)) : line
@@ -76,7 +80,8 @@ enum SettingsText {
             let key = section[0]
             guard section.count >= 2 else { invalid.insert(key.index); continue }
             let value = section[1]
-            switch parseValue(key: key.text.lowercased(), value: value.text.lowercased()) {
+            let name = key.text.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ": "))
+            switch parseValue(key: name, value: value.text.lowercased()) {
             case .unknownKey: invalid.insert(key.index)
             case .badValue: invalid.insert(value.index)
             case .ok(let change): changes.append((value.index, change))
