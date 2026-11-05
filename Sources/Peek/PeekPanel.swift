@@ -1,13 +1,12 @@
 import AppKit
 
-/// Borderless, non-activating panel: it can become key (receive typing) without
-/// activating peek, so the previously active app stays active and gets focus back
-/// as soon as the panel is ordered out.
+/// Borderless floating panel. Shown without taking focus; a click activates peek and
+/// makes it key (see PanelController's focus handling).
 final class PeekPanel: NSPanel {
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 600),
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )

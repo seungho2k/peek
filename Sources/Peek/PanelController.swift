@@ -28,9 +28,10 @@ final class PanelController: NSObject {
     /// from Finder) mouse events don't reach our monitors.
     private var pressPollTimer: Timer?
     /// App that was active before the panel took focus.
-    private var previousApp: NSRunningApplication?
-    /// peek was activated by the panel (not, say, by the settings window).
-    private var activatedForPanel = false
+    /// Most recently active app other than peek, to hand focus back to.
+    private var lastOtherApp: NSRunningApplication?
+    /// The panel got keyboard focus from a click and should give it back.
+    private var focusedByClick = false
 
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -45,6 +46,7 @@ final class PanelController: NSObject {
         setUpContent()
         installMonitors()
         observeSettings()
+        observeActivation()
 
         editor.textView.onPinToggle = { [weak self] in self?.togglePin() }
         editor.textView.onOpenSettings = { [weak self] in self?.onOpenSettings?() }
@@ -192,7 +194,10 @@ final class PanelController: NSObject {
     private func handleMouse(_ event: NSEvent, local: Bool) {
         switch event.type {
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            if local && event.window === panel { pressBeganInside = true }
+            if local && event.window === panel {
+                pressBeganInside = true
+                panelClicked()
+            }
             startPressPolling()
             return
         case .leftMouseUp, .rightMouseUp, .otherMouseUp:
@@ -211,16 +216,16 @@ final class PanelController: NSObject {
         if target == 0 {
             // Hidden or sliding out: only the screen edge brings it back (also mid-drag,
             // so files can be dragged in).
-            if isAtEdge(loc, of: screen) && !Activation.isDockOverlayActive() { show() }
+            if isAtEdge(loc, of: screen) && !SystemState.isDockOverlayActive() { show() }
             return
         }
 
         if pressBeganInside && buttonsDown { return }  // e.g. selecting text or resizing
 
         if isInsideKeepArea(loc, of: screen) {
-            if !hasFocus && !buttonsDown { takeFocus() }
+            return
         } else if isPinned {
-            if activatedForPanel { returnFocus() }
+            if focusedByClick { returnFocus() }
         } else {
             hide()
         }
@@ -258,40 +263,41 @@ final class PanelController: NSObject {
 
     // MARK: Focus
 
-    /// Input methods (e.g. Korean) only work in the active app, so peek activates itself
-    /// while the panel has focus and hands activation back afterwards (see `Activation`).
-    private var hasFocus: Bool { NSApp.isActive && panel.isKeyWindow }
-
-    private func takeFocus() {
-        DebugLog.log("takeFocus \(DebugLog.state)")
-        if !NSApp.isActive {
-            let front = NSWorkspace.shared.frontmostApplication
-            previousApp = front == NSRunningApplication.current ? nil : front
-            activatedForPanel = true
-            Activation.activateSelf()
+    /// The panel only takes keyboard focus when clicked. Clicking activates peek like any
+    /// app (input methods such as Korean need the active app); when the panel closes or the
+    /// mouse leaves a pinned panel, activation goes back to the app used before.
+    private func observeActivation() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated {
+                if let app, app != NSRunningApplication.current { self?.lastOtherApp = app }
+            }
         }
-        panel.makeKeyAndOrderFront(nil)
-        panel.makeFirstResponder(editor.textView)
+    }
+
+    private func panelClicked() {
+        focusedByClick = true
     }
 
     /// Give keyboard focus back to the previously active app (the panel may stay on screen).
-    /// If peek was already active for another reason (settings window), leave it alone.
     private func returnFocus() {
-        DebugLog.log("returnFocus activatedForPanel=\(activatedForPanel) \(DebugLog.state)")
+        DebugLog.log("returnFocus focusedByClick=\(focusedByClick) \(DebugLog.state)")
+        guard focusedByClick else { return }
+        focusedByClick = false
         // Don't leave a half-composed syllable behind; the input method would otherwise
         // commit it later at an odd moment.
         editor.textView.commitComposition()
-        guard activatedForPanel else { return }
-        activatedForPanel = false
         guard NSApp.isActive else { return }
-        if let app = previousApp, !app.isTerminated {
-            // Cooperative activation: hand activation over explicitly.
+        if let other = NSApp.windows.first(where: { $0 !== panel && $0.isVisible && $0.canBecomeKey }) {
+            other.makeKeyAndOrderFront(nil)  // e.g. the settings window stays in charge
+        } else if let app = lastOtherApp, !app.isTerminated {
             NSApp.yieldActivation(to: app)
             app.activate(from: NSRunningApplication.current, options: [])
         } else {
             NSApp.deactivate()
         }
-        previousApp = nil
     }
 
     // MARK: Show / hide
@@ -302,7 +308,6 @@ final class PanelController: NSObject {
             applyFrame()
             panel.orderFrontRegardless()
         }
-        takeFocus()
         animate(to: 1)
     }
 

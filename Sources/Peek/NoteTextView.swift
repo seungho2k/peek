@@ -3,7 +3,7 @@ import AppKit
 /// The note editor. Content is a sequence of lines; each line is plain text (optionally
 /// bold as a whole), a horizontal rule, or a row of images. Rule/image lines ("block
 /// lines") never contain text — typing on them moves to a new line.
-final class NoteTextView: NSTextView, NSTextStorageDelegate {
+final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDelegate {
     var onPinToggle: (() -> Void)?
     var onOpenSettings: (() -> Void)?
 
@@ -43,8 +43,12 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
         writingToolsBehavior = .none
 
         textStorage?.delegate = self
+        layoutManager?.delegate = self
         updateDragTypeRegistration()
     }
+
+    /// The first click on the (unfocused) panel both focuses it and places the caret.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     // MARK: Load / save
 
@@ -81,6 +85,33 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
                     NSUnionRange(shifted($0, after: editedRange, delta: delta), editedRange)
                 } ?? editedRange
             }
+        }
+    }
+
+    /// Fixed metrics for text lines (see `Theme.lineMetrics`); image/rule lines keep their own.
+    nonisolated func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<NSRect>,
+        lineFragmentUsedRect: UnsafeMutablePointer<NSRect>,
+        baselineOffset: UnsafeMutablePointer<CGFloat>,
+        in textContainer: NSTextContainer,
+        forGlyphRange glyphRange: NSRange
+    ) -> Bool {
+        MainActor.assumeIsolated {
+            guard let storage = layoutManager.textStorage else { return false }
+            let chars = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+            var hasAttachment = false
+            if chars.length > 0 {
+                storage.enumerateAttribute(.attachment, in: chars) { value, _, stop in
+                    if value != nil { hasAttachment = true; stop.pointee = true }
+                }
+            }
+            if hasAttachment { return false }
+            let m = Theme.lineMetrics
+            lineFragmentRect.pointee.size.height = m.height
+            lineFragmentUsedRect.pointee.size.height = m.height
+            baselineOffset.pointee = m.baseline
+            return true
         }
     }
 
@@ -364,7 +395,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
     }
 
     override func keyDown(with event: NSEvent) {
-        DebugLog.log("keyDown code=\(event.keyCode) chars=\(event.characters ?? "") ctx=\(inputContext.map { "\($0 === NSTextInputContext.current)" } ?? "nil") \(DebugLog.state)")
+        DebugLog.log("keyDown code=\(event.keyCode) chars=\(event.characters ?? "")")
         if handleKey(event) { return }
         super.keyDown(with: event)
     }
@@ -445,7 +476,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
 
     func perform(_ action: ShortcutAction) {
         switch action {
-        case .plain: makePlain()
+        case .top: moveToDocumentStart()
         case .bold: toggleBold()
         case .list: toggleList()
         case .rule: insertRule()
@@ -456,26 +487,9 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate {
 
     private var selectedLines: [NSRange] { lines(in: selectedRange()) }
 
-    private func makePlain() {
-        let targets = selectedLines
-        let textLines = targets.filter { kind(of: $0) == .text }
-        changeAttributes(of: textLines) { storage in
-            for line in textLines { storage.removeAttribute(.peekBold, range: line) }
-        }
-        var edits: [(NSRange, NSAttributedString)] = []
-        for line in targets {
-            switch kind(of: line) {
-            case .rule:
-                edits.append((line, plain("")))
-            case .images:
-                break
-            case .text:
-                let prefixLen = NoteFormat.listPrefixLength(text(of: line))
-                if prefixLen > 0 { edits.append((NSRange(location: line.location, length: prefixLen), plain(""))) }
-            }
-        }
-        applyEdits(edits)
-        resetTypingAttributes()
+    private func moveToDocumentStart() {
+        setSelectedRange(NSRange(location: 0, length: 0))
+        scrollRangeToVisible(NSRange(location: 0, length: 0))
     }
 
     private func toggleBold() {

@@ -16,11 +16,11 @@ enum PeekEdge: String, CaseIterable, Identifiable {
 }
 
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
-    case plain, bold, list, rule, pin, settings
+    case top, bold, list, rule, pin, settings
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .plain: "플레인 텍스트"
+        case .top: "문서 맨 앞으로"
         case .bold: "굵게"
         case .list: "리스트"
         case .rule: "수평선"
@@ -30,7 +30,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
     }
     var defaultShortcut: Shortcut {
         switch self {
-        case .plain: Shortcut(keyCode: KeyCode.zero, modifiers: .command)
+        case .top: Shortcut(keyCode: KeyCode.zero, modifiers: .command)
         case .bold: Shortcut(keyCode: KeyCode.b, modifiers: .command)
         case .list: Shortcut(keyCode: KeyCode.l, modifiers: .command)
         case .rule: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
@@ -99,7 +99,7 @@ final class Settings: ObservableObject {
         }
         // v1 defaults were ⌘1/⌘2/⌘3; move untouched ones to the current defaults.
         if defaults.integer(forKey: "shortcutsVersion") < 2 {
-            let v1: [ShortcutAction: UInt16] = [.plain: KeyCode.one, .bold: KeyCode.two, .list: KeyCode.three]
+            let v1: [ShortcutAction: UInt16] = [.bold: KeyCode.two, .list: KeyCode.three]
             for (a, key) in v1 where sc[a] == Shortcut(keyCode: key, modifiers: .command) { sc[a] = nil }
             defaults.set(2, forKey: "shortcutsVersion")
         }

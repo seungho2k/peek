@@ -16,6 +16,7 @@ enum SelfTest {
         undo()
         images()
         koreanComposition()
+        lineMetrics()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -96,12 +97,16 @@ enum SelfTest {
                 .fontDescriptor.symbolicTraits.contains(.bold)
         }
         expect("dash stays regular, content bold", !isBold(0) && !isBold(1) && isBold(2))
-        tv.perform(.plain)
-        check("plain clears bold and list", tv, "item")
+        tv.perform(.list)
+        check("list toggle off keeps bold", tv, "**item**")
+        tv.perform(.bold)
+        check("bold toggle off", tv, "item")
         tv.perform(.list)
         check("list toggle on", tv, "- item")
         tv.perform(.list)
         check("list toggle off", tv, "item")
+        tv.perform(.top)
+        expect("⌘0 moves to document start", tv.selectedRange() == NSRange(location: 0, length: 0))
         caret(tv, 2)
         tv.perform(.rule)
         type(tv, "x")
@@ -265,6 +270,23 @@ enum SelfTest {
         rule.setMarkedText("하", selectedRange: NSRange(location: 1, length: 0), replacementRange: nf)
         rule.insertText("하", replacementRange: nf)
         check("korean on rule line goes below", rule, "---\n하")
+    }
+
+    /// Lines must not change height/baseline depending on which fonts they mix
+    /// (Hangul falls back to Apple SD Gothic Neo, which has different metrics than SF).
+    private static func lineMetrics() {
+        func metrics(_ text: String) -> (height: CGFloat, baseline: CGFloat) {
+            let tv = makeView(text)
+            let lm = tv.layoutManager!
+            lm.ensureLayout(for: tv.textContainer!)
+            let rect = lm.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil)
+            return (rect.height, lm.location(forGlyphAt: 0).y)
+        }
+        let hangul = metrics("한글"), mixed = metrics("한글 a"), latin = metrics("abc"), bold = metrics("**한글**")
+        print("     hangul=\(hangul) mixed=\(mixed) latin=\(latin) bold=\(bold)")
+        expect("line height stable when typing latin after hangul", hangul.height == mixed.height && hangul.baseline == mixed.baseline)
+        expect("hangul and latin lines same height", hangul.height == latin.height && hangul.baseline == latin.baseline)
+        expect("bold hangul line same height", bold.height == hangul.height)
     }
 
     private static func undo() {

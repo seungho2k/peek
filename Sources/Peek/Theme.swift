@@ -44,4 +44,17 @@ enum Theme {
     static let textInset = NSSize(width: 3, height: 6)
 
     static let imageGap: CGFloat = 4
+
+    /// One fixed line height/baseline for every text line, large enough for both the system
+    /// font and the Hangul fallback (Apple SD Gothic Neo), so lines don't jump when scripts mix.
+    static let lineMetrics: (height: CGFloat, baseline: CGFloat) = {
+        let lm = NSLayoutManager()
+        var fonts = [font, boldFont]
+        for name in ["AppleSDGothicNeo-Regular", "AppleSDGothicNeo-Bold"] {
+            if let f = NSFont(name: name, size: fontSize) { fonts.append(f) }
+        }
+        let baseline = fonts.map { lm.defaultBaselineOffset(for: $0) }.max() ?? 12
+        let below = fonts.map { lm.defaultLineHeight(for: $0) - lm.defaultBaselineOffset(for: $0) }.max() ?? 3
+        return (ceil(baseline + below), baseline)
+    }()
 }
