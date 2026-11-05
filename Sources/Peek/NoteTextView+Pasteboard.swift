@@ -117,7 +117,7 @@ extension NoteTextView {
             } else {
                 // Text or rule line: new image line below it.
                 let end = NSMaxRange(current)
-                let s = NSMutableAttributedString(string: "\n", attributes: NoteFormat.baseAttributes)
+                let s = NSMutableAttributedString(string: "\n", attributes: baseAttributes)
                 s.append(fragment)
                 applyEdits([(NSRange(location: end, length: 0), s)],
                            selectAfter: NSRange(location: end + s.length, length: 0))

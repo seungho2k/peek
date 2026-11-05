@@ -1,18 +1,17 @@
 import AppKit
 
-/// The settings as editable text. Rule-separated blocks, each starting with a bold title;
-/// inside a block, items are separated by blank lines — a `key:` line, then its value:
+/// The settings as editable text. Rule-separated blocks, each starting with a bold title and
+/// a blank line, then one `key: value` per line:
 ///
 ///     **preferences**
 ///
-///     edge:
-///     right
-///
-///     min-width:
-///     200
+///     edge: right
+///     min-width: 200
 ///     ---
 ///     **animations**
 ///     …
+///
+/// The parser also accepts the value on the line after `key:`.
 @MainActor
 enum SettingsText {
     private static let shortcutKeys: [(key: String, action: ShortcutAction)] = [
@@ -35,7 +34,7 @@ enum SettingsText {
             ("keyboard shortcuts", shortcutKeys.map { ($0.key, ShortcutText.format(s.shortcut(for: $0.action))) }),
         ]
         return blocks.map { block in
-            (["**\(block.title)**"] + block.items.map { "\($0.0):\n\($0.1)" }).joined(separator: "\n\n")
+            "**\(block.title)**\n\n" + block.items.map { "\($0.0): \($0.1)" }.joined(separator: "\n")
         }.joined(separator: "\n---\n")
     }
 
@@ -53,43 +52,47 @@ enum SettingsText {
     /// Parses the sections; `invalid` holds indices of lines that couldn't be applied
     /// (unknown key, missing/bad value, or a shortcut used twice).
     static func parse(_ text: String) -> (changes: [Change], invalid: Set<Int>) {
-        // Items: runs of non-empty lines, split by blank lines and rules. The first item of
-        // each block is its title and isn't parsed.
-        let lines = text.components(separatedBy: "\n")
-        var sections: [[(index: Int, text: String)]] = []
-        var current: [(index: Int, text: String)] = []
-        var expectingTitle = true
-        func flush() {
-            if !current.isEmpty {
-                if expectingTitle { expectingTitle = false } else { sections.append(current) }
-            }
-            current = []
-        }
-        for (i, raw) in lines.enumerated() {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if line == "---" { flush(); expectingTitle = true; continue }
-            if line.isEmpty { flush(); continue }
-            // A bold line is saved as **…**; read the text inside.
-            let plain = line.count >= 4 && line.hasPrefix("**") && line.hasSuffix("**") ? String(line.dropFirst(2).dropLast(2)) : line
-            current.append((i, plain))
-        }
-        flush()
-        sections.insert([], at: 0)  // keeps the loop below skipping index 0
-
         var changes: [(line: Int, change: Change)] = []
         var invalid: Set<Int> = []
-        for section in sections.dropFirst() where !section.isEmpty {  // the first section is the title
-            let key = section[0]
-            guard section.count >= 2 else { invalid.insert(key.index); continue }
-            let value = section[1]
-            let name = key.text.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ": "))
-            switch parseValue(key: name, value: value.text.lowercased()) {
-            case .unknownKey: invalid.insert(key.index)
-            case .badValue: invalid.insert(value.index)
-            case .ok(let change): changes.append((value.index, change))
+
+        func take(key: String, keyLine: Int, value: String, valueLine: Int) {
+            let name = key.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ": "))
+            switch parseValue(key: name, value: value.lowercased()) {
+            case .unknownKey: invalid.insert(keyLine)
+            case .badValue: invalid.insert(valueLine)
+            case .ok(let change): changes.append((valueLine, change))
             }
-            for extra in section.dropFirst(2) { invalid.insert(extra.index) }
         }
+
+        // Each block's first line is its title. Items are `key: value` on one line, or `key:`
+        // with the value on the next line.
+        var expectingTitle = true
+        var pendingKey: (text: String, line: Int)?
+        for (i, raw) in text.components(separatedBy: "\n").enumerated() {
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            if trimmed == "---" || trimmed.isEmpty {
+                if let key = pendingKey { invalid.insert(key.line) }  // key without a value
+                pendingKey = nil
+                if trimmed == "---" { expectingTitle = true }
+                continue
+            }
+            // A bold line is saved as **…**; read the text inside.
+            let line = trimmed.count >= 4 && trimmed.hasPrefix("**") && trimmed.hasSuffix("**")
+                ? String(trimmed.dropFirst(2).dropLast(2)) : trimmed
+            if expectingTitle { expectingTitle = false; continue }
+            if let key = pendingKey {
+                take(key: key.text, keyLine: key.line, value: line, valueLine: i)
+                pendingKey = nil
+            } else if let colon = line.firstIndex(of: ":"),
+                      case let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces),
+                      !value.isEmpty {
+                take(key: String(line[..<colon]), keyLine: i, value: value, valueLine: i)
+            } else {
+                pendingKey = (line, i)
+            }
+        }
+        if let key = pendingKey { invalid.insert(key.line) }
+
         // A shortcut that appears in more than one section is ambiguous: apply none of them.
         var byShortcut: [Shortcut: [Int]] = [:]
         for (line, change) in changes {

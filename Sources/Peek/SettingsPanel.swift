@@ -31,6 +31,7 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.delegate = self
+        textView.hidesLineNumbers = true
         textView.onOpenSettings = { [weak self] in self?.onClose?() }
         textView.onEscape = { [weak self] in self?.onClose?() }
 
@@ -95,7 +96,7 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
     func debugRender(to path: String) {
         load()
         // Make the edge value invalid.
-        let edgeValue = (textView.string as NSString).range(of: "edge:\n" + settings.edge.rawValue)
+        let edgeValue = (textView.string as NSString).range(of: "edge: " + settings.edge.rawValue)
         let valueEnd = NSMaxRange(edgeValue)
         textView.setSelectedRange(NSRange(location: valueEnd, length: 0))
         textView.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))

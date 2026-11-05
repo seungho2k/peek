@@ -432,6 +432,9 @@ enum SelfTest {
         // 16 fade-in 17 90 || 19 title | 21 rule 22 cmd+k | 24 fill 25 cmd+k | 27 fade-out (no value)
         expect("bad lines flagged (\(bad.invalid.sorted()))", bad.invalid == [3, 10, 14, 22, 25, 27])
         expect("good lines applied; invalid min-width becomes 100", bad.changes == [.minWidth(100), .fadeIn(90)])
+        let oneLine = SettingsText.parse("**preferences**\n\nedge: left\nmin-width: 150\nbogus: 1\nfade-in: x\n---\n**keys**\n\ntoggle: opt+space")
+        expect("one-line items parse (\(oneLine.invalid.sorted()))", oneLine.invalid == [4, 5]
+            && oneLine.changes == [.edge(.left), .minWidth(150), .shortcut(.pin, Shortcut(keyCode: KeyCode.space, modifiers: .option))])
         expect("min-width below 100 becomes 100", SettingsText.parse("t\n---\nt\n\nmin-width:\n60").changes == [.minWidth(100)])
     }
 

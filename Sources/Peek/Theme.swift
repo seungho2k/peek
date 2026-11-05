@@ -80,7 +80,10 @@ enum Theme {
 
     /// Paragraph styles: text lines start after the gutter; image and rule lines ("blocks")
     /// use the full width.
-    static var textParagraph: NSParagraphStyle { paragraph(indent: showLineNumbers ? gutterWidth : textRightMargin) }
+    static var textParagraph: NSParagraphStyle { textParagraph(lineNumbers: showLineNumbers) }
+    static func textParagraph(lineNumbers: Bool) -> NSParagraphStyle {
+        paragraph(indent: lineNumbers ? gutterWidth : textRightMargin)
+    }
     /// Mirrors the line-numbers setting (off: no gutter; text keeps the same margin as on the right).
     nonisolated(unsafe) static var showLineNumbers = true
     static let blockParagraph = paragraph(indent: blockSideInset)

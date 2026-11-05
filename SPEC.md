@@ -168,42 +168,32 @@ peek는 화면 가장자리에 붙는 **단 하나의 노트**다.
 
 설정 창은 없다. ⌘,(또는 peek를 한 번 더 실행)를 누르면 노트 안쪽 옆(오른쪽 노트면 왼쪽)에 **텍스트 설정 패널**이 화면 위아래로 꽉 차게 붙어 뜬다. 노트가 닫혀 있으면 함께 연다.
 
-- 노트와 같은 에디터라서 줄 번호, 수평선, 굵게가 똑같이 적용된다. 수평선으로 나뉜 블럭 3개, 각 블럭은 굵은 제목으로 시작하고, 블럭 안에서는 빈 줄로 항목을 나눈다. 항목은 `이름:` 줄 다음 값 줄.
+- 노트와 같은 에디터라서 수평선, 굵게가 똑같이 적용된다. 단 **줄 번호는 항상 표시하지 않는다**(line-numbers 설정과 무관). 수평선으로 나뉜 블럭 3개, 각 블럭은 굵은 제목과 빈 줄로 시작하고, 이어서 한 줄에 하나씩 `이름: 값`.
 
 ```
 **preferences**
 
-edge:
-right
-
-min-width:
-100
-
-launch-at-login:
-on
-
-bold-first-line:
-on
-
-line-numbers:
-on
+edge: right
+min-width: 100
+launch-at-login: on
+bold-first-line: on
+line-numbers: on
 ---
 **animations**
 
-fade-in:
-100
-
-fade-out:
-100
+fade-in: 100
+fade-out: 100
 ---
 **keyboard shortcuts**
 
-toggle:
-opt+space
-(bold / rule / fill / settings 이어서)
+toggle: opt+space
+bold: cmd+b
+rule: cmd+l
+fill: cmd+enter
+settings: cmd+,
 ```
 
-- 블럭 제목은 해석하지 않는다(이름을 바꿔도 무방). 항목은 어느 블럭에 있어도 되고, `이름` 뒤의 `:`는 있어도 없어도 된다.
+- 블럭 제목은 해석하지 않는다(이름을 바꿔도 무방). 항목은 어느 블럭에 있어도 된다. `이름:` 다음 줄에 값을 써도 인식한다.
 - 값: `edge` right/left, `min-width` 숫자(100 미만이거나 숫자가 아니면 100), `line-numbers` on/off(끄면 번호 칸이 없어지고 글자는 왼쪽 8pt 여백에서 시작), `fade-in`/`fade-out` 0–5000(ms), `launch-at-login`/`bold-first-line` on/off, 단축키는 cmd/opt/ctrl/shift + 키(예: opt+space, cmd+enter; cmd/opt/ctrl 중 하나 필수).
 - 패널 폭은 항상 `min-width`. `min-width`는 최소 100. 노트 옆에 그만큼 공간이 없으면 노트를 모자란 폭만큼만 줄이고(예: 노트 1920pt, min-width 100 → 노트 1820pt) 그 자리에 띄운다. 설정을 닫으면 노트 폭이 돌아온다.
 - 입력하는 즉시 반영. 적용할 수 없는 줄(모르는 이름, 잘못되거나 빠진 값, 다른 항목과 겹치는 단축키)은 빨간색.

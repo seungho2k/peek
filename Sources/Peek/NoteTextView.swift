@@ -6,6 +6,11 @@ import Quartz
 /// lines") never contain text — typing on them moves to a new line.
 final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDelegate {
     var onOpenSettings: (() -> Void)?
+
+    /// Never show line numbers in this view (the settings panel); otherwise follow the setting.
+    var hidesLineNumbers = false
+    var showsLineNumbers: Bool { !hidesLineNumbers && Theme.showLineNumbers }
+    var baseAttributes: [NSAttributedString.Key: Any] { NoteFormat.baseAttributes(lineNumbers: showsLineNumbers) }
     var onToggleFill: (() -> Void)?
 
     /// Quick Look state (see NoteTextView+QuickLook).
@@ -42,7 +47,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         // Lay out only what's visible: keeps resizing smooth with long notes.
         layoutManager?.allowsNonContiguousLayout = true
         insertionPointColor = Theme.text
-        typingAttributes = NoteFormat.baseAttributes
+        typingAttributes = baseAttributes
 
         isContinuousSpellCheckingEnabled = false
         isGrammarCheckingEnabled = false
@@ -90,7 +95,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// Image and rule lines are not counted; numbering restarts at 00 after every rule.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
-        guard Theme.showLineNumbers else { return }
+        guard showsLineNumbers else { return }
         guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
         let ns = storage.string as NSString
         let origin = textContainerOrigin
@@ -164,7 +169,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         range editedRange: NSRange, changeInLength delta: Int
     ) {
         MainActor.assumeIsolated {
-            NoteFormat.restyle(textStorage, range: editedRange)
+            NoteFormat.restyle(textStorage, range: editedRange, lineNumbers: showsLineNumbers)
             lastEditedRange = editedRange
             if editedMask.contains(.editedCharacters) {
                 pendingNormalizeRange = pendingNormalizeRange.map {
@@ -267,11 +272,11 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     }
 
     private func plain(_ s: String) -> NSAttributedString {
-        NSAttributedString(string: s, attributes: NoteFormat.baseAttributes)
+        NSAttributedString(string: s, attributes: baseAttributes)
     }
 
     private func resetTypingAttributes() {
-        typingAttributes = NoteFormat.baseAttributes
+        typingAttributes = baseAttributes
     }
 
     // MARK: Editing primitives (undoable)
@@ -383,7 +388,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         guard sel.length == 0 else { return }
         let current = line(at: sel.location)
         guard current.length == 0, NoteFormat.isFirstLineOfSection(storage, current) else { return }
-        var attrs = NoteFormat.baseAttributes
+        var attrs = baseAttributes
         attrs[.peekBold] = true
         attrs[.font] = Theme.boldFont
         typingAttributes = attrs
@@ -629,7 +634,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         if nonEmpty.isEmpty {
             // Empty line: toggle bold for what's typed next.
             guard !textLines.isEmpty else { return }
-            var attrs = NoteFormat.baseAttributes
+            var attrs = baseAttributes
             if typingAttributes[.peekBold] == nil {
                 attrs[.peekBold] = true
                 attrs[.font] = Theme.boldFont
@@ -648,7 +653,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
                 }
             }
         }
-        var attrs = NoteFormat.baseAttributes
+        var attrs = baseAttributes
         if makeBold {
             attrs[.peekBold] = true
             attrs[.font] = Theme.boldFont
