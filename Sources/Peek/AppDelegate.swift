@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func runFocusProbe() {
         func report(_ label: String) {
             let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
-            print("\(label): visible=\(panelController.panel.isVisible) front=\(front) active=\(NSApp.isActive) key=\(panelController.panel.isKeyWindow)")
+            print("\(label): visible=\(panelController.panel.isVisible) frame=\(panelController.panel.frame) alpha=\(panelController.panel.alphaValue) screen=\(NSScreen.main!.visibleFrame) front=\(front) active=\(NSApp.isActive) key=\(panelController.panel.isKeyWindow)")
         }
         report("before")
         let delay = Double(ProcessInfo.processInfo.environment["PEEK_FOCUS_PROBE"] ?? "") ?? 0.5

@@ -49,7 +49,6 @@ final class Settings: ObservableObject {
     static let defaultSideWidth: CGFloat = 360
     static let defaultBottomHeight: CGFloat = 320
     static let minPanelLength: CGFloat = 200
-    static let maxPanelFraction: CGFloat = 0.8
 
     @Published var edge: PeekEdge {
         didSet { defaults.set(edge.rawValue, forKey: "edge") }

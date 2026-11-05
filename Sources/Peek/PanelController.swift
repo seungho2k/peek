@@ -9,6 +9,7 @@ final class PanelController: NSObject {
     let editor: NoteEditor
     private let settings = Settings.shared
     private let resizeHandle = ResizeHandle()
+    private let closeButton = CloseButton()
 
     /// 0 = fully hidden, 1 = fully shown.
     private var progress: CGFloat = 0
@@ -77,6 +78,10 @@ final class PanelController: NSObject {
 
         resizeHandle.onDrag = { [weak self] point in self?.resize(to: point) }
         content.addSubview(resizeHandle)
+
+        // Shown only when the panel fills the screen, since the mouse can't leave it then.
+        closeButton.onClick = { [weak self] in self?.closeFromButton() }
+        content.addSubview(closeButton)
         layoutContent()
         panel.initialFirstResponder = editor.textView
         panel.makeFirstResponder(editor.textView)
@@ -100,6 +105,10 @@ final class PanelController: NSObject {
             resizeHandle.autoresizingMask = [.width, .minYMargin]
         }
         resizeHandle.edge = settings.edge
+
+        let size = CloseButton.size, inset: CGFloat = 8
+        closeButton.frame = NSRect(x: b.width - inset - size, y: b.height - inset - size, width: size, height: size)
+        closeButton.autoresizingMask = [.minXMargin, .minYMargin]
     }
 
     private func observeSettings() {
@@ -145,39 +154,49 @@ final class PanelController: NSObject {
     }
 
     private func depth(for screen: NSScreen) -> CGFloat {
-        let raw = settings.edge.isSide ? settings.sideWidth : settings.bottomHeight
-        let span = settings.edge.isSide ? screen.frame.width : screen.frame.height
-        return clampDepth(raw, span: span)
+        clampDepth(settings.edge.isSide ? settings.sideWidth : settings.bottomHeight, on: screen)
     }
 
-    private func clampDepth(_ value: CGFloat, span: CGFloat) -> CGFloat {
-        min(max(value, Settings.minPanelLength), span * Settings.maxPanelFraction).rounded()
+    /// Largest depth: the panel fills the screen like Window ▸ Fill (menu bar excluded).
+    private func maxDepth(on screen: NSScreen) -> CGFloat {
+        let f = screen.frame, vf = screen.visibleFrame
+        switch settings.edge {
+        case .right: return f.maxX - vf.minX
+        case .left: return vf.maxX - f.minX
+        case .bottom: return vf.maxY - f.minY
+        }
     }
 
-    private func frame(progress p: CGFloat, on screen: NSScreen) -> NSRect {
+    private func clampDepth(_ value: CGFloat, on screen: NSScreen) -> CGFloat {
+        min(max(value, Settings.minPanelLength), maxDepth(on: screen)).rounded()
+    }
+
+    private var isFull: Bool {
+        guard let screen = targetScreen else { return false }
+        return depth(for: screen) >= maxDepth(on: screen) - 0.5
+    }
+
+    private func frame(on screen: NSScreen) -> NSRect {
         let f = screen.frame
         let vf = screen.visibleFrame
         let d = depth(for: screen)
-        let shown = (d * p).rounded()
         switch settings.edge {
-        case .right:
-            return NSRect(x: f.maxX - shown, y: vf.minY, width: d, height: vf.height)
-        case .left:
-            return NSRect(x: f.minX - d + shown, y: vf.minY, width: d, height: vf.height)
-        case .bottom:
-            return NSRect(x: vf.minX, y: f.minY - d + shown, width: vf.width, height: d)
+        case .right: return NSRect(x: f.maxX - d, y: vf.minY, width: d, height: vf.height)
+        case .left: return NSRect(x: f.minX, y: vf.minY, width: d, height: vf.height)
+        case .bottom: return NSRect(x: vf.minX, y: f.minY, width: vf.width, height: d)
         }
     }
 
+    /// Positions the panel and applies the fade (`progress` is the opacity).
     private func applyFrame() {
         guard let screen = targetScreen else { return }
-        let newFrame = frame(progress: progress, on: screen)
-        if newFrame.size != panel.frame.size {
+        let newFrame = frame(on: screen)
+        if newFrame != panel.frame {
             panel.setFrame(newFrame, display: true)
             layoutContent()
-        } else {
-            panel.setFrameOrigin(newFrame.origin)
         }
+        panel.alphaValue = progress
+        closeButton.setShown(isFull)
     }
 
     private func isAtEdge(_ p: NSPoint, of screen: NSScreen) -> Bool {
@@ -327,6 +346,11 @@ final class PanelController: NSObject {
         editor.saveNow()
     }
 
+    private func closeFromButton() {
+        isPinned = false
+        hide()
+    }
+
     func togglePin() {
         isPinned.toggle()
         if !isPinned {
@@ -385,7 +409,8 @@ final class PanelController: NSObject {
         switch event.type {
         case .leftMouseDown:
             guard event.window === panel, event.modifierFlags.contains(.option) else { return false }
-            optionResize = (NSEvent.mouseLocation, settings.edge.isSide ? settings.sideWidth : settings.bottomHeight)
+            guard let screen = targetScreen else { return false }
+            optionResize = (NSEvent.mouseLocation, depth(for: screen))
             pressBeganInside = true
             startPressPolling()
             (settings.edge.isSide ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
@@ -393,11 +418,10 @@ final class PanelController: NSObject {
         case .leftMouseDragged:
             guard let start = optionResize, let screen = targetScreen else { return false }
             let p = NSEvent.mouseLocation
-            let f = screen.frame
             switch settings.edge {
-            case .right: settings.sideWidth = clampDepth(start.depth + start.point.x - p.x, span: f.width)
-            case .left: settings.sideWidth = clampDepth(start.depth + p.x - start.point.x, span: f.width)
-            case .bottom: settings.bottomHeight = clampDepth(start.depth + p.y - start.point.y, span: f.height)
+            case .right: settings.sideWidth = clampDepth(start.depth + start.point.x - p.x, on: screen)
+            case .left: settings.sideWidth = clampDepth(start.depth + p.x - start.point.x, on: screen)
+            case .bottom: settings.bottomHeight = clampDepth(start.depth + p.y - start.point.y, on: screen)
             }
             applyFrame()
             return true
@@ -415,9 +439,9 @@ final class PanelController: NSObject {
         guard let screen = targetScreen else { return }
         let f = screen.frame
         switch settings.edge {
-        case .right: settings.sideWidth = clampDepth(f.maxX - point.x, span: f.width)
-        case .left: settings.sideWidth = clampDepth(point.x - f.minX, span: f.width)
-        case .bottom: settings.bottomHeight = clampDepth(point.y - f.minY, span: f.height)
+        case .right: settings.sideWidth = clampDepth(f.maxX - point.x, on: screen)
+        case .left: settings.sideWidth = clampDepth(point.x - f.minX, on: screen)
+        case .bottom: settings.bottomHeight = clampDepth(point.y - f.minY, on: screen)
         }
         applyFrame()
     }
