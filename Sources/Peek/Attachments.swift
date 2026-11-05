@@ -53,7 +53,9 @@ final class RuleCell: NSTextAttachmentCell {
         Theme.rule.setFill()
         let scale = controlView?.window?.backingScaleFactor ?? 2
         let thickness = 1 / scale * max(1, scale / 2)
-        NSRect(x: frame.minX, y: floor(frame.midY), width: frame.width, height: thickness).fill()
+        // The line keeps a margin on both sides (the cell itself spans the full width).
+        let m = Theme.ruleSideMargin - Theme.blockSideInset
+        NSRect(x: frame.minX + m, y: floor(frame.midY), width: max(1, frame.width - 2 * m), height: thickness).fill()
     }
 }
 

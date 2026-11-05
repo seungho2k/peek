@@ -81,6 +81,8 @@ enum Theme {
     static let blockParagraph = paragraph(indent: blockSideInset)
     /// Image rows and rules keep this much from both panel edges (so they don't cover the border).
     static let blockSideInset: CGFloat = 1
+    /// Horizontal rules leave this much on both sides (same as the text's right margin).
+    static let ruleSideMargin: CGFloat = textRightMargin
 
     private static func paragraph(indent: CGFloat) -> NSParagraphStyle {
         let p = NSMutableParagraphStyle()
