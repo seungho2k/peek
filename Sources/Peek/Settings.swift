@@ -15,21 +15,6 @@ enum PeekEdge: String, CaseIterable, Identifiable {
     var isSide: Bool { self != .bottom }
 }
 
-/// How horizontal rules are drawn and counted (two candidates being compared).
-enum RuleStyle: String, CaseIterable, Identifiable {
-    /// Edge to edge, no line number; numbering restarts at 00 after each rule.
-    case fullWidth
-    /// Counted and numbered like a text line; starts after the gutter, runs to the right edge.
-    case numbered
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .fullWidth: "Full Width"
-        case .numbered: "Numbered"
-        }
-    }
-}
-
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
     case bold, rule, fill, pin, settings
     var id: String { rawValue }
@@ -38,7 +23,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         case .bold: "Bold Line"
         case .rule: "Horizontal Rule"
         case .fill: "Toggle Fill Screen"
-        case .pin: "Open & Pin (Global)"
+        case .pin: "Show / Hide peek (Global)"
         case .settings: "Open Settings"
         }
     }
@@ -81,9 +66,6 @@ final class Settings: ObservableObject {
     @Published var bottomHeight: CGFloat {
         didSet { defaults.set(Double(bottomHeight), forKey: "bottomHeight") }
     }
-    @Published var ruleStyle: RuleStyle {
-        didSet { defaults.set(ruleStyle.rawValue, forKey: "ruleStyle") }
-    }
     /// Smallest panel width (left/right) or height (bottom), in pt.
     @Published var minDepth: Double {
         didSet { defaults.set(minDepth, forKey: "minDepth") }
@@ -104,7 +86,7 @@ final class Settings: ObservableObject {
         slideOutMs = defaults.object(forKey: "slideOutMs") as? Double ?? 120
         defaults.removeObject(forKey: "hideMargin")  // setting removed
         minDepth = defaults.object(forKey: "minDepth") as? Double ?? 200
-        ruleStyle = RuleStyle(rawValue: defaults.string(forKey: "ruleStyle") ?? "") ?? .fullWidth
+        defaults.removeObject(forKey: "ruleStyle")  // setting removed (full-width rules)
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
         bottomHeight = CGFloat(defaults.object(forKey: "bottomHeight") as? Double ?? Double(Self.defaultBottomHeight))
 

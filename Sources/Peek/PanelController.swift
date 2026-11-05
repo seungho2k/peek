@@ -20,17 +20,8 @@ final class PanelController: NSObject {
     private var animDuration: CFTimeInterval = 0
     private var animTimer: Timer?
 
-    private(set) var isPinned = false
-    /// False right after a forced close while the cursor may be on the edge; re-armed once
-    /// the cursor leaves the edge.
-    private var edgeTriggerArmed = true
     /// Start of an ⌥-drag resize: mouse location and panel depth at mouse-down.
     private var optionResize: (point: NSPoint, depth: CGFloat)?
-    /// A mouse button went down inside the panel and is still held.
-    private var pressBeganInside = false
-    /// Polls the mouse while a button is held: during drag sessions (e.g. dragging a file
-    /// from Finder) mouse events don't reach our monitors.
-    private var pressPollTimer: Timer?
 
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -69,8 +60,7 @@ final class PanelController: NSObject {
     // MARK: Setup
 
     private func setUpContent() {
-        let content = TrackingView()
-        content.onMouseExited = { [weak self] in self?.evaluateMouse(event: nil) }
+        let content = NSView()
         panel.contentView = content
 
         editor.scrollView.translatesAutoresizingMaskIntoConstraints = true
@@ -112,9 +102,6 @@ final class PanelController: NSObject {
         settings.$shortcuts.dropFirst().sink { [weak self] shortcuts in
             DispatchQueue.main.async { self?.hotKey.register(shortcuts[.pin] ?? ShortcutAction.pin.defaultShortcut) }
         }.store(in: &cancellables)
-        settings.$ruleStyle.dropFirst().sink { [weak self] _ in
-            DispatchQueue.main.async { self?.editor.textView.restyleAll() }
-        }.store(in: &cancellables)
         settings.$minDepth.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async { self?.applyFrame() }
         }.store(in: &cancellables)
@@ -123,24 +110,11 @@ final class PanelController: NSObject {
         }.store(in: &cancellables)
     }
 
+    /// Only for ⌥-drag resizing inside the panel; the panel is opened/closed with the hotkey.
     private func installMonitors() {
-        let mouseEvents: NSEvent.EventTypeMask = [
-            .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
-            .leftMouseDown, .rightMouseDown, .otherMouseDown,
-            .leftMouseUp, .rightMouseUp, .otherMouseUp,
-        ]
-        if let g = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents, handler: { [weak self] event in
-            MainActor.assumeIsolated { self?.handleMouse(event, local: false) }
-        }) {
-            monitors.append(g)
-        }
+        let mouseEvents: NSEvent.EventTypeMask = [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
         if let l = NSEvent.addLocalMonitorForEvents(matching: mouseEvents, handler: { [weak self] event in
-            let consumed = MainActor.assumeIsolated { () -> Bool in
-                guard let self else { return false }
-                if self.handleOptionResize(event) { return true }
-                self.handleMouse(event, local: true)
-                return false
-            }
+            let consumed = MainActor.assumeIsolated { self?.handleOptionResize(event) ?? false }
             return consumed ? nil : event
         }) {
             monitors.append(l)
@@ -204,95 +178,6 @@ final class PanelController: NSObject {
         panel.alphaValue = progress
     }
 
-    private func isAtEdge(_ p: NSPoint, of screen: NSScreen) -> Bool {
-        let f = screen.frame
-        switch settings.edge {
-        case .right: return p.x >= f.maxX - 1 && p.y >= f.minY && p.y <= f.maxY
-        case .left: return p.x < f.minX + 1 && p.y >= f.minY && p.y <= f.maxY
-        case .bottom: return p.y < f.minY + 1 && p.x >= f.minX && p.x <= f.maxX
-        }
-    }
-
-    // MARK: Mouse
-
-    private func handleMouse(_ event: NSEvent, local: Bool) {
-        switch event.type {
-        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            if local && event.window === panel {
-                pressBeganInside = true
-                panelClicked()
-            }
-            startPressPolling()
-            return
-        case .leftMouseUp, .rightMouseUp, .otherMouseUp:
-            if !SystemState.isMouseButtonDown { pressBeganInside = false }
-        default:
-            break
-        }
-        evaluateMouse(event: event)
-    }
-
-    private func evaluateMouse(event: NSEvent?) {
-        guard let screen = targetScreen else { return }
-        let loc = NSEvent.mouseLocation
-        let buttonsDown = SystemState.isMouseButtonDown
-
-        if target == 0 {
-            // Hidden or sliding out: only the screen edge brings it back (also mid-drag,
-            // so files can be dragged in).
-            let atEdge = isAtEdge(loc, of: screen)
-            if !edgeTriggerArmed {
-                if !atEdge { edgeTriggerArmed = true }
-                return
-            }
-            if atEdge { show() }
-            return
-        }
-
-        if pressBeganInside && buttonsDown { return }  // e.g. selecting text or resizing
-
-        if !isPinned && !isInsideKeepArea(loc, of: screen) {
-            hide()
-        }
-    }
-
-    /// The panel's band: along the edge the whole screen length counts, so sliding the mouse
-    /// up/down never closes it.
-    private func isInsideKeepArea(_ p: NSPoint, of screen: NSScreen) -> Bool {
-        if isAtEdge(p, of: screen) { return true }
-        let f = panel.frame
-        switch settings.edge {
-        case .right: return p.x >= f.minX
-        case .left: return p.x <= f.maxX
-        case .bottom: return p.y <= f.maxY
-        }
-    }
-
-    private func startPressPolling() {
-        guard pressPollTimer == nil else { return }
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                if !SystemState.isMouseButtonDown {
-                    self.pressPollTimer?.invalidate()
-                    self.pressPollTimer = nil
-                    self.pressBeganInside = false
-                }
-                self.evaluateMouse(event: nil)
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        pressPollTimer = timer
-    }
-
-    // MARK: Focus
-
-    /// Clicking the panel focuses it (peek becomes the active app, as with any window) and
-    /// pins it. Focus never moves because of mouse movement.
-    private func panelClicked() {
-        isPinned = true
-    }
-
     // MARK: Show / hide
 
     func show() {
@@ -311,37 +196,10 @@ final class PanelController: NSObject {
         animate(to: 0)
     }
 
-    private func hideImmediately() {
-        animTimer?.invalidate()
-        animTimer = nil
-        target = 0
-        progress = 0
-        editor.textView.commitComposition()
-        panel.orderOut(nil)
-        editor.saveNow()
-    }
-
-    /// Global hotkey: open + pin without taking focus. When pinned: unpin and fade out even
-    /// if the mouse is over the panel. When open but not pinned: pin.
+    /// Global hotkey: show (without taking focus) or hide. The panel stays until toggled off;
+    /// clicking it focuses it like any window.
     func hotKeyPressed() {
-        if target == 0 {
-            isPinned = true
-            show()
-        } else if isPinned {
-            isPinned = false
-            // The mouse may sit on the screen edge; don't reopen until it has left the edge.
-            edgeTriggerArmed = false
-            hide()
-        } else {
-            isPinned = true
-        }
-    }
-
-    func togglePin() {
-        isPinned.toggle()
-        if !isPinned {
-            evaluateMouse(event: nil)
-        }
+        if target == 0 { show() } else { hide() }
     }
 
     // MARK: Animation
@@ -433,8 +291,6 @@ final class PanelController: NSObject {
             guard let screen = targetScreen else { return false }
             optionResize = (NSEvent.mouseLocation, depth(for: screen))
             depthBeforeFill = nil
-            pressBeganInside = true
-            startPressPolling()
             (settings.edge.isSide ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
             return true
         case .leftMouseDragged:
@@ -474,8 +330,6 @@ final class PanelController: NSObject {
     private func edgeChanged() {
         liveDepth = nil
         depthBeforeFill = nil
-        hideImmediately()
-        isPinned = false
         applyFrame()
         layoutContent()
     }
@@ -483,23 +337,5 @@ final class PanelController: NSObject {
     @objc private func screensChanged() {
         if progress == 0 { return }
         applyFrame()
-    }
-}
-
-/// Content view that reports when the mouse leaves the panel.
-final class TrackingView: NSView {
-    var onMouseExited: (() -> Void)?
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(
-            rect: .zero,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-            owner: self))
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        onMouseExited?()
     }
 }

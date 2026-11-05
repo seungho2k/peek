@@ -67,22 +67,10 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         NSPoint(x: 0, y: textContainerInset.height)
     }
 
-    /// Re-applies line styles to the whole note (e.g. after the rule style setting changes).
-    func restyleAll() {
-        guard let storage = textStorage, let lm = layoutManager else { return }
-        let all = NSRange(location: 0, length: storage.length)
-        storage.beginEditing()
-        storage.edited(.editedAttributes, range: all, changeInLength: 0)  // restyled in willProcessEditing
-        storage.endEditing()
-        lm.invalidateLayout(forCharacterRange: all, actualCharacterRange: nil)
-        needsDisplay = true
-    }
-
     // MARK: Line numbers
 
     /// Faint two-digit numbers (00, 01, …) in the left gutter of every text line.
-    /// Image lines are not counted. Rules depend on `RuleStyle`: full-width rules aren't counted
-    /// and restart numbering at 00; numbered rules count like a text line.
+    /// Image and rule lines are not counted; numbering restarts at 00 after every rule.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
         guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
@@ -107,16 +95,14 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
             }
         }
 
-        let ruleStyle = Settings.shared.ruleStyle
         var number = 0
         var index = 0
         while index < ns.length {
             let paragraph = ns.paragraphRange(for: NSRange(location: index, length: 0))
             let attachment = storage.attribute(.attachment, at: index, effectiveRange: nil)
-            let numbered = attachment == nil || (attachment is RuleAttachment && ruleStyle == .numbered)
-            if attachment is RuleAttachment && ruleStyle == .fullWidth {
+            if attachment is RuleAttachment {
                 number = 0  // each rule starts a new section, counted from 00
-            } else if numbered {
+            } else if attachment == nil {
                 let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
                 if frag.minY + origin.y > rect.maxY { return }
                 draw(number, lineTop: frag.minY)

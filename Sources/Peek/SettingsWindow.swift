@@ -13,6 +13,8 @@ final class SettingsWindowController {
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             w.center()
+            w.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)  // always on top, above the note
+            w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window = w
         }
         NSApp.activate()
@@ -31,13 +33,6 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 numberRow(settings.edge.isSide ? "Minimum Width" : "Minimum Height", unit: "pt", value: $settings.minDepth, range: 100...3000)
-            }
-
-            Section("Note") {
-                Picker("Horizontal Rule", selection: $settings.ruleStyle) {
-                    ForEach(RuleStyle.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
             }
 
             Section("Animation") {

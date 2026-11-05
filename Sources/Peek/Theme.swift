@@ -79,14 +79,6 @@ enum Theme {
     /// use the full width.
     static var textParagraph: NSParagraphStyle { paragraph(indent: gutterWidth) }
     static let blockParagraph = paragraph(indent: blockSideInset)
-    /// Numbered rules: after the gutter like text, but running to the right edge.
-    static var numberedRuleParagraph: NSParagraphStyle {
-        let p = NSMutableParagraphStyle()
-        p.firstLineHeadIndent = gutterWidth
-        p.headIndent = gutterWidth
-        p.tailIndent = 0
-        return p
-    }
     /// Image rows and rules keep this much from both panel edges (so they don't cover the border).
     static let blockSideInset: CGFloat = 1
 

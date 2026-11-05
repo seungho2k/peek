@@ -14,10 +14,6 @@ enum SelfTest {
         window.backgroundColor = Theme.background
         editor.scrollView.frame = window.contentView!.bounds
         window.contentView!.addSubview(editor.scrollView)
-        let previousRuleStyle = Settings.shared.ruleStyle
-        if let raw = ProcessInfo.processInfo.environment["PEEK_RULE_STYLE"], let style = RuleStyle(rawValue: raw) {
-            Settings.shared.ruleStyle = style
-        }
         let sample = ProcessInfo.processInfo.environment["PEEK_RENDER_TEXT"]?.replacingOccurrences(of: "\\n", with: "\n")
         editor.textView.load(markdown: sample ?? "한글 제목 line\n**굵은 줄**\n- 리스트\n  - 들여쓰기\n---\n마지막\n")
         editor.scrollView.tile()
@@ -37,7 +33,6 @@ enum SelfTest {
         image.unlockFocus()
         let tiff = image.tiffRepresentation!
         try? NSBitmapImageRep(data: tiff)!.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: path))
-        Settings.shared.ruleStyle = previousRuleStyle
         exit(0)
     }
 
