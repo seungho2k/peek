@@ -1,8 +1,9 @@
 import AppKit
 
-/// Width available to a line inside the given text container.
-func usableLineWidth(_ container: NSTextContainer) -> CGFloat {
-    max(1, container.size.width - 2 * container.lineFragmentPadding - 1)
+/// Width available on a line: the proposed line fragment already accounts for the
+/// paragraph's indent (text/rule lines sit after the line-number gutter, images don't).
+func usableLineWidth(_ lineFragment: NSRect, _ container: NSTextContainer) -> CGFloat {
+    max(1, lineFragment.width - 2 * container.lineFragmentPadding - 1)
 }
 
 // MARK: Horizontal rule
@@ -25,7 +26,7 @@ final class RuleCell: NSTextAttachmentCell {
     ) -> NSRect {
         let font = Theme.font
         let height = ceil(font.ascender - font.descender + font.leading)
-        return NSRect(x: 0, y: floor(font.descender), width: usableLineWidth(textContainer), height: height)
+        return NSRect(x: 0, y: floor(font.descender), width: usableLineWidth(lineFrag, textContainer), height: height)
     }
 
     override func cellSize() -> NSSize { NSSize(width: 100, height: 15) }
@@ -108,7 +109,7 @@ final class ImageCell: NSTextAttachmentCell {
         else { return NSRect(origin: .zero, size: cellSize()) }
 
         let row = Self.row(in: storage, at: charIndex)
-        let available = usableLineWidth(textContainer) - Theme.imageGap * CGFloat(max(row.count - 1, 0))
+        let available = usableLineWidth(lineFrag, textContainer) - Theme.imageGap * CGFloat(max(row.count - 1, 0))
         let height = max(1, floor(available / max(row.aspects, 0.01)))
         // Every image but the last carries the gap to its right inside its own cell.
         let gap = charIndex == row.lastIndex ? 0 : Theme.imageGap

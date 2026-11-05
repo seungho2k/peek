@@ -16,24 +16,20 @@ enum SelfTest {
         window.contentView!.addSubview(editor.scrollView)
         let sample = ProcessInfo.processInfo.environment["PEEK_RENDER_TEXT"]?.replacingOccurrences(of: "\\n", with: "\n")
         editor.textView.load(markdown: sample ?? "한글 제목 line\n**굵은 줄**\n- 리스트\n  - 들여쓰기\n---\n마지막\n")
-        editor.refreshLineNumbers()
         editor.scrollView.tile()
         window.orderFrontRegardless()
         window.displayIfNeeded()
         let view = window.contentView!
         view.layoutSubtreeIfNeeded()
         editor.textView.layoutManager!.ensureLayout(for: editor.textView.textContainer!)
-        // Compose: ruler on the left, text view on the right.
-        let tv = editor.textView, ruler = editor.scrollView.verticalRulerView!
-        let size = NSSize(width: ruler.frame.width + tv.frame.width, height: 260)
+        let tv = editor.textView
+        let size = NSSize(width: tv.frame.width, height: 260)
         let image = NSImage(size: size)
         image.lockFocusFlipped(true)
         Theme.background.setFill(); NSRect(origin: .zero, size: size).fill()
-        for (v, x) in [(ruler as NSView, CGFloat(0)), (tv as NSView, ruler.frame.width)] {
-            let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds)!
-            v.cacheDisplay(in: v.bounds, to: rep)
-            rep.draw(in: NSRect(x: x, y: 0, width: v.bounds.width, height: v.bounds.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
-        }
+        let rep = tv.bitmapImageRepForCachingDisplay(in: tv.bounds)!
+        tv.cacheDisplay(in: tv.bounds, to: rep)
+        rep.draw(in: NSRect(origin: .zero, size: tv.bounds.size), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         image.unlockFocus()
         let tiff = image.tiffRepresentation!
         try? NSBitmapImageRep(data: tiff)!.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: path))
@@ -241,7 +237,7 @@ enum SelfTest {
         lm.ensureLayout(for: tc)
         let r0 = lm.boundingRect(forGlyphRange: NSRange(location: 0, length: 1), in: tc)
         let r1 = lm.boundingRect(forGlyphRange: NSRange(location: 1, length: 1), in: tc)
-        let usable = usableLineWidth(tc)
+        let usable = tc.size.width - 1  // image lines have no indent
         print("     row: \(r0) \(r1) usable=\(usable)")
         expect("row images share height", abs(r0.height - r1.height) < 1)
         expect("row on one line", abs(r0.minY - r1.minY) < 1)
@@ -337,11 +333,6 @@ enum SelfTest {
                 let idx = tv.characterIndexForInsertion(at: NSPoint(x: 6, y: y))
                 let lineOfIdx = ns.substring(to: min(idx, ns.length)).filter { $0 == "\n" }.count
                 expect("click line \(line + 1) of \(doc.debugDescription) → line \(lineOfIdx + 1) (idx \(idx))", lineOfIdx == line)
-                tv.setSelectedRange(NSRange(location: idx, length: 0))
-                let caret = tv.firstRect(forCharacterRange: NSRange(location: idx, length: 0), actualRange: nil)
-                let caretInView = tv.window!.convertFromScreen(caret)
-                let local = tv.convert(caretInView, from: nil)
-                if doc.hasSuffix("\n\n") { print("       line \(line + 1): fragY=\(frag.minY)..\(frag.maxY) caretY=\(local.minY)..\(local.maxY) extra=\(lm.extraLineFragmentRect)") }
             }
         }
     }

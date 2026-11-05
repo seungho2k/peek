@@ -55,6 +55,51 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         NSPoint(x: 0, y: textContainerInset.height)
     }
 
+    // MARK: Line numbers
+
+    /// Faint two-digit numbers (00, 01, …) in the left gutter of every text/rule line.
+    /// Image lines are not counted and use the gutter for the image itself.
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
+        let ns = storage.string as NSString
+        let origin = textContainerOrigin
+        let font = Theme.font
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: Theme.lineNumber]
+        let cell = Theme.digitCell
+        let numbersRight = Theme.gutterWidth - Theme.spaceWidth
+        let labelBaseline = lm.defaultBaselineOffset(for: font)
+
+        func draw(_ number: Int, lineTop: CGFloat) {
+            let y = lineTop + origin.y + Theme.lineMetrics.baseline - labelBaseline
+            guard y + Theme.lineMetrics.height >= rect.minY, y <= rect.maxY else { return }
+            let digits = String(format: "%02d", number)
+            var x = origin.x + numbersRight - CGFloat(digits.count) * cell
+            for d in digits {
+                let glyph = String(d) as NSString
+                let w = glyph.size(withAttributes: attrs).width
+                glyph.draw(at: NSPoint(x: x + (cell - w) / 2, y: y), withAttributes: attrs)
+                x += cell
+            }
+        }
+
+        var number = 0
+        var index = 0
+        while index < ns.length {
+            let paragraph = ns.paragraphRange(for: NSRange(location: index, length: 0))
+            if !(storage.attribute(.attachment, at: index, effectiveRange: nil) is ImageAttachment) {
+                let frag = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: index), effectiveRange: nil)
+                if frag.minY + origin.y > rect.maxY { return }
+                draw(number, lineTop: frag.minY)
+                number += 1
+            }
+            index = NSMaxRange(paragraph)
+        }
+        if lm.extraLineFragmentTextContainer === tc {
+            draw(number, lineTop: lm.extraLineFragmentRect.minY)
+        }
+    }
+
     /// The first click on the (unfocused) panel both focuses it and places the caret.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -129,6 +174,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
 
     override func didChangeText() {
         super.didChangeText()
+        needsDisplay = true  // line numbers below the edit may shift
         guard !isNormalizing, !hasMarkedText(), let range = pendingNormalizeRange else { return }
         pendingNormalizeRange = nil
         isNormalizing = true

@@ -26,7 +26,7 @@ enum NoteFormat {
     static let imageRef = try! NSRegularExpression(pattern: #"!\[\]\(images/([^)\s/]+)\)"#)
 
     static var baseAttributes: [NSAttributedString.Key: Any] {
-        [.font: Theme.font, .foregroundColor: Theme.text]
+        [.font: Theme.font, .foregroundColor: Theme.text, .paragraphStyle: Theme.textParagraph]
     }
 
     // MARK: Parse
@@ -184,6 +184,7 @@ enum NoteFormat {
             let bold = kind(of: storage, line: line) == .text && isBold(storage, line: line)
 
             ensureColor(storage, withBreak)
+            ensureIndent(storage, withBreak, kind(of: storage, line: line) == .images ? 0 : Theme.gutterWidth)
             if bold && line.length > 0 {
                 ensureFont(storage, line, bold: true)
                 ensureFont(storage, NSRange(location: NSMaxRange(line), length: withBreak.length - line.length), bold: false)
@@ -208,6 +209,17 @@ enum NoteFormat {
         }
         let target = bold ? Theme.boldFont : Theme.font
         for r in fixes { storage.addAttribute(.font, value: target, range: r) }
+    }
+
+    private static func ensureIndent(_ storage: NSTextStorage, _ range: NSRange, _ indent: CGFloat) {
+        guard range.length > 0 else { return }
+        var fixes: [NSRange] = []
+        storage.enumerateAttribute(.paragraphStyle, in: range) { value, r, _ in
+            let p = value as? NSParagraphStyle
+            if p?.headIndent != indent || p?.firstLineHeadIndent != indent { fixes.append(r) }
+        }
+        let style = indent == 0 ? Theme.imageParagraph : Theme.textParagraph
+        for r in fixes { storage.addAttribute(.paragraphStyle, value: style, range: r) }
     }
 
     private static func ensureColor(_ storage: NSTextStorage, _ range: NSRange) {

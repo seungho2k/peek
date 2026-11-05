@@ -65,6 +65,24 @@ enum Theme {
         dark: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.16)
     )
 
+    /// Line-number gutter: a space, two digit cells, a space. Digits are drawn one per
+    /// fixed-width cell because the font's digits are proportional.
+    static var digitCell: CGFloat {
+        (0...9).map { (String($0) as NSString).size(withAttributes: [.font: font]).width }.max() ?? 7
+    }
+    static var gutterWidth: CGFloat { ceil(2 * spaceWidth + 2 * digitCell) }
+
+    /// Paragraph styles: text/rule lines start after the gutter; image lines use the full width.
+    static var textParagraph: NSParagraphStyle { paragraph(indent: gutterWidth) }
+    static let imageParagraph = paragraph(indent: 0)
+
+    private static func paragraph(indent: CGFloat) -> NSParagraphStyle {
+        let p = NSMutableParagraphStyle()
+        p.firstLineHeadIndent = indent
+        p.headIndent = indent
+        return p
+    }
+
     /// Close button glyph (faint) and its hover background.
     static let closeGlyph = dynamic(
         light: NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.35),
