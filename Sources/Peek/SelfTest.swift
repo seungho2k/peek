@@ -123,8 +123,6 @@ enum SelfTest {
         check("bold toggle off", tv, "- item")
         tv.selectAll(nil)
         tv.insertText("item", replacementRange: NSRange(location: NSNotFound, length: 0))
-        tv.perform(.top)
-        expect("⌘0 moves to document start", tv.selectedRange() == NSRange(location: 0, length: 0))
         caret(tv, 2)
         tv.perform(.rule)
         type(tv, "x")

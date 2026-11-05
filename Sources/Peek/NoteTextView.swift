@@ -552,7 +552,6 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
 
     func perform(_ action: ShortcutAction) {
         switch action {
-        case .top: moveToDocumentStart()
         case .bold: toggleBold()
         case .rule: insertRule()
         case .pin: break  // global hotkey, handled by PanelController
@@ -562,11 +561,6 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     }
 
     private var selectedLines: [NSRange] { lines(in: selectedRange()) }
-
-    private func moveToDocumentStart() {
-        setSelectedRange(NSRange(location: 0, length: 0))
-        scrollRangeToVisible(NSRange(location: 0, length: 0))
-    }
 
     private func toggleBold() {
         guard let storage = textStorage else { return }

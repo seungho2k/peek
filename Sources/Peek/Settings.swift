@@ -16,11 +16,10 @@ enum PeekEdge: String, CaseIterable, Identifiable {
 }
 
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
-    case top, bold, rule, fill, pin, settings
+    case bold, rule, fill, pin, settings
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .top: "Go to Top"
         case .bold: "Bold Line"
         case .rule: "Horizontal Rule"
         case .fill: "Toggle Fill Screen"
@@ -30,7 +29,6 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
     }
     var defaultShortcut: Shortcut {
         switch self {
-        case .top: Shortcut(keyCode: KeyCode.zero, modifiers: .command)
         case .bold: Shortcut(keyCode: KeyCode.b, modifiers: .command)
         case .rule: Shortcut(keyCode: KeyCode.l, modifiers: .command)
         case .fill: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
