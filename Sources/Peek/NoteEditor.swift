@@ -27,7 +27,7 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
         textView.delegate = self
 
         scrollView.documentView = textView
-        scrollView.hasVerticalScroller = true
+        scrollView.hasVerticalScroller = false  // scrolls with the trackpad/wheel; no visible bar
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.scrollerStyle = .overlay

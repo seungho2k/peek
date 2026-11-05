@@ -1,7 +1,8 @@
 import AppKit
 
-/// Width available on a line: the proposed line fragment already accounts for the
-/// paragraph's indent (text/rule lines sit after the line-number gutter, images don't).
+/// Width available on a line: the proposed line fragment accounts for the paragraph's head
+/// indent (text/rule lines sit after the line-number gutter, images don't) but not its
+/// tail indent, so rules subtract the right margin themselves.
 func usableLineWidth(_ lineFragment: NSRect, _ container: NSTextContainer) -> CGFloat {
     max(1, lineFragment.width - 2 * container.lineFragmentPadding - 1)
 }
@@ -26,7 +27,7 @@ final class RuleCell: NSTextAttachmentCell {
     ) -> NSRect {
         let font = Theme.font
         let height = ceil(font.ascender - font.descender + font.leading)
-        return NSRect(x: 0, y: floor(font.descender), width: usableLineWidth(lineFrag, textContainer), height: height)
+        return NSRect(x: 0, y: floor(font.descender), width: usableLineWidth(lineFrag, textContainer) - Theme.textRightMargin, height: height)
     }
 
     override func cellSize() -> NSSize { NSSize(width: 100, height: 15) }

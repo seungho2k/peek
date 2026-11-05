@@ -65,6 +65,38 @@ extension NoteTextView: QLPreviewPanelDataSource, QLPreviewPanelDelegate {
         panel.delegate = nil
     }
 
+    /// While Quick Look is open: ←/↑ previous, →/↓ next, Esc or Space closes. Handles keys
+    /// whether they reach the Quick Look panel (via the delegate) or the note.
+    func handleQuickLookKey(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, QLPreviewPanel.sharedPreviewPanelExists(),
+              let panel = QLPreviewPanel.shared(), panel.isVisible
+        else { return false }
+        let count = max(previewURLs.count, 1)
+        switch event.keyCode {
+        case 123, 126:  // ← ↑
+            panel.currentPreviewItemIndex = (panel.currentPreviewItemIndex - 1 + count) % count
+        case 124, 125:  // → ↓
+            panel.currentPreviewItemIndex = (panel.currentPreviewItemIndex + 1) % count
+        case 53, 49:  // Esc, Space
+            panel.orderOut(nil)
+        default:
+            return false
+        }
+        return true
+    }
+
+    nonisolated func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
+        guard let event else { return false }
+        let keyCode = event.keyCode, type = event.type
+        return MainActor.assumeIsolated {
+            guard type == .keyDown, let synthetic = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode)
+            else { return false }
+            return handleQuickLookKey(synthetic)
+        }
+    }
+
     nonisolated func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
         MainActor.assumeIsolated { previewURLs.count }
     }

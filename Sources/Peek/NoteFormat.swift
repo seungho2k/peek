@@ -263,11 +263,12 @@ enum NoteFormat {
     private static func ensureIndent(_ storage: NSTextStorage, _ range: NSRange, _ indent: CGFloat) {
         guard range.length > 0 else { return }
         var fixes: [NSRange] = []
+        let style = indent == 0 ? Theme.imageParagraph : Theme.textParagraph
         storage.enumerateAttribute(.paragraphStyle, in: range) { value, r, _ in
             let p = value as? NSParagraphStyle
-            if p?.headIndent != indent || p?.firstLineHeadIndent != indent { fixes.append(r) }
+            if p?.headIndent != style.headIndent || p?.firstLineHeadIndent != style.firstLineHeadIndent
+                || p?.tailIndent != style.tailIndent { fixes.append(r) }
         }
-        let style = indent == 0 ? Theme.imageParagraph : Theme.textParagraph
         for r in fixes { storage.addAttribute(.paragraphStyle, value: style, range: r) }
     }
 

@@ -350,6 +350,12 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         switch kind(of: current) {
         case .rule, .images:
             if sel.location == current.location { break }  // plain newline: opens a line above
+            if sel.location < NSMaxRange(current) {
+                // Between two images: split the row into two image lines.
+                applyEdits([(sel, plain("\n"))], selectAfter: NSRange(location: sel.location + 1, length: 0))
+                resetTypingAttributes()
+                return
+            }
             let end = NSMaxRange(current)
             applyEdits([(NSRange(location: end, length: 0), plain("\n"))],
                        selectAfter: NSRange(location: end + 1, length: 0))
@@ -438,6 +444,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// Handles peek's own keys. Matched by physical key so they also work with Korean input.
     private func handleKey(_ event: NSEvent) -> Bool {
         guard event.type == .keyDown else { return false }
+        if handleQuickLookKey(event) { return true }
         let mods = event.modifierFlags.intersection(Shortcut.relevantModifiers)
 
         // Ctrl + h/j/k/l → arrow keys (fixed).

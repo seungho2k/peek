@@ -49,9 +49,11 @@ enum Theme {
             ?? .boldSystemFont(ofSize: fontSize)
     }
 
-    /// Text inset: `height` top/bottom; the text starts right after the line numbers and
-    /// keeps `2 × width` free on the right (see NoteTextView.textContainerOrigin).
-    static let textInset = NSSize(width: 4, height: 6)
+    /// Text inset: top/bottom only. Horizontally the container spans the whole panel: text/rule
+    /// lines start after the line-number gutter and keep `textRightMargin` on the right
+    /// (paragraph indents); image lines use the full width, edge to edge.
+    static let textInset = NSSize(width: 0, height: 6)
+    static let textRightMargin: CGFloat = 8
 
     /// Width of one space in the body font: the gap between a line number and its text,
     /// so "01 text" reads as one continuous line.
@@ -80,6 +82,7 @@ enum Theme {
         let p = NSMutableParagraphStyle()
         p.firstLineHeadIndent = indent
         p.headIndent = indent
+        p.tailIndent = indent == 0 ? 0 : -textRightMargin
         return p
     }
 

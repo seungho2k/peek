@@ -202,6 +202,11 @@ enum SelfTest {
         mergeFwd.deleteForward(nil)
         check("forward delete joins two image lines", mergeFwd, a + b)
 
+        let split = makeView(a + b)
+        caret(split, 1)
+        split.insertNewline(nil)
+        check("enter between images splits the row", split, "\(a)\n\(b)")
+
         let back = makeView("\(a)\ntext")
         caret(back, 2)
         back.deleteBackward(nil)
