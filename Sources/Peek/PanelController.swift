@@ -216,7 +216,7 @@ final class PanelController: NSObject {
     }
 
     /// Docks the settings panel full-height against the note's inner side. If there's no room
-    /// for it, the note first shrinks to its minimum width (until the settings close).
+    /// for it, the note first narrows by the missing width (until the settings close).
     private func layoutSettings() {
         guard !isLayingOutSettings, let screen = targetScreen else { return }
         isLayingOutSettings = true
@@ -226,8 +226,9 @@ final class PanelController: NSObject {
         var note = panel.frame
         let room = settings.edge == .right ? note.minX - vf.minX : vf.maxX - note.maxX
         if room < width && !shrunkForSettings && liveDepth == nil {
+            // Narrow the note just enough for the settings to fit beside it.
             shrunkForSettings = true
-            setDepth(CGFloat(settings.minDepth), persist: false)
+            setDepth(note.width - (width - room), persist: false)
             note = panel.frame
         }
         let x = settings.edge == .right ? max(vf.minX, note.minX - width) : min(vf.maxX - width, note.maxX)
