@@ -2,7 +2,7 @@ import AppKit
 
 /// Faint two-digit line numbers (01, 02, …) beside each logical line.
 final class LineNumberRuler: NSRulerView {
-    private static let font = NSFont.monospacedDigitSystemFont(ofSize: Theme.fontSize, weight: .regular)
+    private static let font = Theme.font
     private static let rightPadding = Theme.spaceWidth
     private static let leftPadding = Theme.spaceWidth  // same as the gap to the text
     private static let width = ceil(leftPadding + ("00" as NSString).size(withAttributes: [.font: font]).width + rightPadding)
