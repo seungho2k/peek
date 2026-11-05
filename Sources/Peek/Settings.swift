@@ -1,0 +1,135 @@
+import AppKit
+import Combine
+import ServiceManagement
+
+enum PeekEdge: String, CaseIterable, Identifiable {
+    case right, left, bottom
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .right: "오른쪽"
+        case .left: "왼쪽"
+        case .bottom: "아래"
+        }
+    }
+    var isSide: Bool { self != .bottom }
+}
+
+enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
+    case plain, bold, list, rule, pin, settings
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .plain: "플레인 텍스트"
+        case .bold: "굵게"
+        case .list: "리스트"
+        case .rule: "수평선"
+        case .pin: "pin 토글"
+        case .settings: "설정 열기"
+        }
+    }
+    var defaultShortcut: Shortcut {
+        switch self {
+        case .plain: Shortcut(keyCode: KeyCode.one, modifiers: .command)
+        case .bold: Shortcut(keyCode: KeyCode.two, modifiers: .command)
+        case .list: Shortcut(keyCode: KeyCode.three, modifiers: .command)
+        case .rule: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
+        case .pin: Shortcut(keyCode: KeyCode.p, modifiers: .command)
+        case .settings: Shortcut(keyCode: KeyCode.comma, modifiers: .command)
+        }
+    }
+}
+
+@MainActor
+final class Settings: ObservableObject {
+    static let shared = Settings()
+
+    private let defaults = UserDefaults.standard
+
+    static let defaultSideWidth: CGFloat = 360
+    static let defaultBottomHeight: CGFloat = 320
+    static let minPanelLength: CGFloat = 200
+    static let maxPanelFraction: CGFloat = 0.8
+
+    @Published var edge: PeekEdge {
+        didSet { defaults.set(edge.rawValue, forKey: "edge") }
+    }
+    /// Slide-in duration in milliseconds.
+    @Published var slideInMs: Double {
+        didSet { defaults.set(slideInMs, forKey: "slideInMs") }
+    }
+    /// Slide-out duration in milliseconds.
+    @Published var slideOutMs: Double {
+        didSet { defaults.set(slideOutMs, forKey: "slideOutMs") }
+    }
+    /// Panel width when peeking from the left or right edge.
+    @Published var sideWidth: CGFloat {
+        didSet { defaults.set(Double(sideWidth), forKey: "sideWidth") }
+    }
+    /// Panel height when peeking from the bottom edge.
+    @Published var bottomHeight: CGFloat {
+        didSet { defaults.set(Double(bottomHeight), forKey: "bottomHeight") }
+    }
+    @Published var shortcuts: [ShortcutAction: Shortcut] {
+        didSet { saveShortcuts() }
+    }
+    @Published var launchAtLogin: Bool {
+        didSet {
+            guard launchAtLogin != oldValue else { return }
+            applyLaunchAtLogin()
+        }
+    }
+
+    private init() {
+        edge = PeekEdge(rawValue: defaults.string(forKey: "edge") ?? "") ?? .right
+        slideInMs = defaults.object(forKey: "slideInMs") as? Double ?? 150
+        slideOutMs = defaults.object(forKey: "slideOutMs") as? Double ?? 120
+        sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
+        bottomHeight = CGFloat(defaults.object(forKey: "bottomHeight") as? Double ?? Double(Self.defaultBottomHeight))
+
+        var sc: [ShortcutAction: Shortcut] = [:]
+        if let data = defaults.data(forKey: "shortcuts"),
+           let stored = try? JSONDecoder().decode([String: Shortcut].self, from: data) {
+            for (k, v) in stored { if let a = ShortcutAction(rawValue: k) { sc[a] = v } }
+        }
+        for a in ShortcutAction.allCases where sc[a] == nil { sc[a] = a.defaultShortcut }
+        shortcuts = sc
+
+        launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    func shortcut(for action: ShortcutAction) -> Shortcut {
+        shortcuts[action] ?? action.defaultShortcut
+    }
+
+    func action(matching event: NSEvent) -> ShortcutAction? {
+        ShortcutAction.allCases.first { shortcut(for: $0).matches(event) }
+    }
+
+    func resetShortcuts() {
+        var sc: [ShortcutAction: Shortcut] = [:]
+        for a in ShortcutAction.allCases { sc[a] = a.defaultShortcut }
+        shortcuts = sc
+    }
+
+    private func saveShortcuts() {
+        let dict = Dictionary(uniqueKeysWithValues: shortcuts.map { ($0.key.rawValue, $0.value) })
+        if let data = try? JSONEncoder().encode(dict) { defaults.set(data, forKey: "shortcuts") }
+    }
+
+    private func applyLaunchAtLogin() {
+        do {
+            if launchAtLogin {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            NSLog("peek: launch at login change failed: \(error)")
+            let actual = SMAppService.mainApp.status == .enabled
+            if actual != launchAtLogin {
+                DispatchQueue.main.async { self.launchAtLogin = actual }
+            }
+        }
+    }
+}
