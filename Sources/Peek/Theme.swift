@@ -59,7 +59,8 @@ enum Theme {
     /// so "01 text" reads as one continuous line.
     static var spaceWidth: CGFloat { (" " as NSString).size(withAttributes: [.font: font]).width }
 
-    static let imageGap: CGFloat = 4
+    /// Space between images on the same line (none: they sit flush).
+    static let imageGap: CGFloat = 0
 
     /// Line numbers: barely visible.
     static let lineNumber = dynamic(
