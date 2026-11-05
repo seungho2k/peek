@@ -9,7 +9,6 @@ final class PanelController: NSObject {
     let editor: NoteEditor
     private let settings = Settings.shared
     private let resizeHandle = ResizeHandle()
-    private let closeStrip = CloseStrip()
     private let hotKey = GlobalHotKey()
 
     /// 0 = fully hidden, 1 = fully shown.
@@ -82,9 +81,6 @@ final class PanelController: NSObject {
         resizeHandle.onDragEnded = { [weak self] in self?.commitLiveDepth() }
         content.addSubview(resizeHandle)
 
-        // Shown only when the panel fills the screen, since the mouse can't leave it then.
-        closeStrip.onClick = { [weak self] in self?.closeFromButton() }
-        content.addSubview(closeStrip)
         layoutContent()
         panel.initialFirstResponder = editor.textView
         panel.makeFirstResponder(editor.textView)
@@ -96,20 +92,7 @@ final class PanelController: NSObject {
         let t = Self.handleThickness
         let b = content.bounds
 
-        // When full, a close strip runs along the screen edge and the text area gives way.
-        let s = isFull ? CloseStrip.thickness : 0
-        switch settings.edge {
-        case .right:
-            editor.scrollView.frame = NSRect(x: 0, y: 0, width: b.width - s, height: b.height)
-            closeStrip.frame = NSRect(x: b.width - CloseStrip.thickness, y: 0, width: CloseStrip.thickness, height: b.height)
-        case .left:
-            editor.scrollView.frame = NSRect(x: s, y: 0, width: b.width - s, height: b.height)
-            closeStrip.frame = NSRect(x: 0, y: 0, width: CloseStrip.thickness, height: b.height)
-        case .bottom:
-            editor.scrollView.frame = NSRect(x: 0, y: s, width: b.width, height: b.height - s)
-            closeStrip.frame = NSRect(x: 0, y: 0, width: b.width, height: CloseStrip.thickness)
-        }
-        closeStrip.setShown(isFull)
+        editor.scrollView.frame = b
         switch settings.edge {
         case .right:
             resizeHandle.frame = NSRect(x: 0, y: 0, width: t, height: b.height)
@@ -216,7 +199,6 @@ final class PanelController: NSObject {
             layoutContent()
         }
         panel.alphaValue = progress
-        if closeStrip.shown != isFull { layoutContent() }
     }
 
     private func isAtEdge(_ p: NSPoint, of screen: NSScreen) -> Bool {
@@ -334,11 +316,6 @@ final class PanelController: NSObject {
         editor.textView.commitComposition()
         panel.orderOut(nil)
         editor.saveNow()
-    }
-
-    private func closeFromButton() {
-        isPinned = false
-        hide()
     }
 
     /// Global hotkey: open + pin without taking focus. When pinned: unpin and fade out even

@@ -89,16 +89,6 @@ enum Theme {
         return p
     }
 
-    /// Close button glyph (faint) and its hover background.
-    static let closeGlyph = dynamic(
-        light: NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.35),
-        dark: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.4)
-    )
-    static let closeHover = dynamic(
-        light: NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.07),
-        dark: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.1)
-    )
-
     /// One fixed line height/baseline for every text line, large enough for both the system
     /// font and the Hangul fallback (Apple SD Gothic Neo), so lines don't jump when scripts mix.
     static let lineMetrics: (height: CGFloat, baseline: CGFloat) = {
