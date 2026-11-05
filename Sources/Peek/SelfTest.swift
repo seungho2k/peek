@@ -14,7 +14,8 @@ enum SelfTest {
         window.backgroundColor = Theme.background
         editor.scrollView.frame = window.contentView!.bounds
         window.contentView!.addSubview(editor.scrollView)
-        editor.textView.load(markdown: "한글 제목 line\n**굵은 줄**\n- 리스트\n  - 들여쓰기\n---\n마지막\n")
+        let sample = ProcessInfo.processInfo.environment["PEEK_RENDER_TEXT"]?.replacingOccurrences(of: "\\n", with: "\n")
+        editor.textView.load(markdown: sample ?? "한글 제목 line\n**굵은 줄**\n- 리스트\n  - 들여쓰기\n---\n마지막\n")
         editor.refreshLineNumbers()
         editor.scrollView.tile()
         window.orderFrontRegardless()
@@ -24,7 +25,7 @@ enum SelfTest {
         editor.textView.layoutManager!.ensureLayout(for: editor.textView.textContainer!)
         // Compose: ruler on the left, text view on the right.
         let tv = editor.textView, ruler = editor.scrollView.verticalRulerView!
-        let size = NSSize(width: ruler.frame.width + tv.frame.width, height: 200)
+        let size = NSSize(width: ruler.frame.width + tv.frame.width, height: 260)
         let image = NSImage(size: size)
         image.lockFocusFlipped(true)
         Theme.background.setFill(); NSRect(origin: .zero, size: size).fill()

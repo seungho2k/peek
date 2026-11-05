@@ -5,7 +5,11 @@ final class LineNumberRuler: NSRulerView {
     private static let font = Theme.font
     private static let rightPadding = Theme.spaceWidth
     private static let leftPadding = Theme.spaceWidth  // same as the gap to the text
-    private static let width = ceil(leftPadding + ("00" as NSString).size(withAttributes: [.font: font]).width + rightPadding)
+    /// Every digit gets a cell this wide (the font's digits are proportional), so numbers line up.
+    private static let digitCell: CGFloat = (0...9).map {
+        (String($0) as NSString).size(withAttributes: [.font: font]).width
+    }.max() ?? 7
+    private static let width = ceil(leftPadding + 2 * digitCell + rightPadding)
     /// Distance from the top of a drawn label to its baseline.
     private static let labelBaseline = NSLayoutManager().defaultBaselineOffset(for: font)
 
@@ -41,9 +45,14 @@ final class LineNumberRuler: NSRulerView {
             let baseline = hasText ? Theme.lineMetrics.baseline : Self.labelBaseline
             let pointInText = NSPoint(x: 0, y: lineTop + origin.y + baseline)
             let y = convert(pointInText, from: tv).y - Self.labelBaseline
-            let label = String(format: "%02d", number) as NSString
-            let size = label.size(withAttributes: attrs)
-            label.draw(at: NSPoint(x: bounds.width - Self.rightPadding - size.width, y: y), withAttributes: attrs)
+            let digits = String(format: "%02d", number)
+            var x = bounds.width - Self.rightPadding - CGFloat(digits.count) * Self.digitCell
+            for d in digits {
+                let glyph = String(d) as NSString
+                let w = glyph.size(withAttributes: attrs).width
+                glyph.draw(at: NSPoint(x: x + (Self.digitCell - w) / 2, y: y), withAttributes: attrs)
+                x += Self.digitCell
+            }
         }
 
         let visibleGlyphs = lm.glyphRange(forBoundingRect: tv.visibleRect, in: tc)
