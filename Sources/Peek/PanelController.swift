@@ -29,6 +29,8 @@ final class PanelController: NSObject {
     let settingsPanel = SettingsPanelController()
     /// The note was narrowed to make room for the settings panel.
     private var shrunkForSettings = false
+    /// The settings are open (they fade out and back in with the note).
+    private var settingsOpen = false
     private var isLayingOutSettings = false
 
     private static let handleThickness: CGFloat = 5
@@ -110,7 +112,7 @@ final class PanelController: NSObject {
         settings.$minDepth.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async {
                 self?.applyFrame()
-                if self?.settingsPanel.isVisible == true { self?.layoutSettings() }
+                if self?.settingsOpen == true { self?.layoutSettings() }
             }
         }.store(in: &cancellables)
         settings.$edge.dropFirst().sink { [weak self] _ in
@@ -179,9 +181,10 @@ final class PanelController: NSObject {
         if newFrame != panel.frame {
             panel.setFrame(newFrame, display: true)
             layoutContent()
-            if settingsPanel.isVisible { layoutSettings() }
+            if settingsOpen { layoutSettings() }
         }
         panel.alphaValue = progress
+        if settingsOpen { settingsPanel.panel.alphaValue = progress }  // fades with the note
     }
 
     // MARK: Show / hide
@@ -191,23 +194,32 @@ final class PanelController: NSObject {
             if NoteStore.shared.hasExternalChange() { editor.reload() }
             applyFrame()
             panel.orderFrontRegardless()
+            if settingsOpen {
+                // Settings that were open when the note was hidden come back with it.
+                layoutSettings()
+                settingsPanel.panel.alphaValue = progress
+                settingsPanel.panel.orderFrontRegardless()
+            }
         }
         animate(to: 1)
     }
 
     /// ⌘, (or launching peek again): text settings beside the note; opens the note if needed.
     func showSettings() {
-        if target == 0 { show() }
         settingsPanel.load()
-        layoutSettings()
+        settingsOpen = true
+        if target == 0 { show() } else { layoutSettings() }
+        settingsPanel.panel.alphaValue = progress
         settingsPanel.present()
     }
 
     func toggleSettings() {
-        if settingsPanel.isVisible { hideSettings() } else { showSettings() }
+        if settingsOpen { hideSettings() } else { showSettings() }
     }
 
+    /// Closes the settings for good (⌘, / Esc). Hiding the note only fades them out with it.
     func hideSettings() {
+        settingsOpen = false
         settingsPanel.hide()
         if shrunkForSettings {
             // Give the note its own width back.
@@ -239,9 +251,9 @@ final class PanelController: NSObject {
 
     func hide() {
         guard target != 0 else { return }
-        hideSettings()
         // Don't leave a half-composed syllable behind.
         editor.textView.commitComposition()
+        settingsPanel.textView.commitComposition()
         animate(to: 0)
     }
 
@@ -291,6 +303,7 @@ final class PanelController: NSObject {
     private func finishAnimation() {
         if target == 0 {
             panel.orderOut(nil)
+            if settingsOpen { settingsPanel.panel.orderOut(nil) }  // still open; returns with the note
             editor.saveNow()
         }
     }

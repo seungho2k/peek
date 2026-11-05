@@ -58,7 +58,6 @@ final class SettingsPanelController: NSObject, NSTextViewDelegate {
 
     /// Shows it and gives it keyboard focus.
     func present() {
-        panel.alphaValue = 1
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(textView)

@@ -30,6 +30,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                 report("shown")
+                if ProcessInfo.processInfo.environment["PEEK_SETTINGS_TOGGLE_PROBE"] != nil {
+                    let pc = self.panelController!, sp = pc.settingsPanel.panel
+                    func state(_ l: String) { print("\(l): note=\(pc.panel.isVisible)/\(String(format: "%.2f", pc.panel.alphaValue)) settings=\(sp.isVisible)/\(String(format: "%.2f", sp.alphaValue))") }
+                    pc.showSettings(); state("settings opened")
+                    pc.hotKeyPressed()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { state("mid fade-out")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { state("hidden")
+                            pc.hotKeyPressed()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) { state("mid fade-in")
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { state("shown again"); exit(0) }
+                            }
+                        }
+                    }
+                    return
+                }
                 if ProcessInfo.processInfo.environment["PEEK_SETTINGS_PROBE"] != nil {
                     self.panelController.showSettings()
                     let sp = self.panelController.settingsPanel.panel
