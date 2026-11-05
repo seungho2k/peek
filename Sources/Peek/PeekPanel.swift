@@ -59,14 +59,29 @@ final class ResizeHandle: NSView {
 final class CloseStrip: NSView {
     static let thickness: CGFloat = 28
     var onClick: (() -> Void)?
-    private var hovering = false { didSet { needsDisplay = true } }
     private(set) var shown = false
+    /// Hover tint, faded in/out via its opacity.
+    private let hoverTint = FillView()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         alphaValue = 0
         isHidden = true
+        hoverTint.frame = bounds
+        hoverTint.autoresizingMask = [.width, .height]
+        hoverTint.alphaValue = 0
+        addSubview(hoverTint)
+        let glyph = CrossGlyphView(frame: bounds)
+        glyph.autoresizingMask = [.width, .height]
+        addSubview(glyph)  // above the tint
+    }
+
+    private func setHovering(_ on: Bool, animated: Bool = true) {
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = animated ? 0.15 : 0
+            hoverTint.animator().alphaValue = on ? 1 : 0
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -82,7 +97,7 @@ final class CloseStrip: NSView {
             MainActor.assumeIsolated {
                 guard let self, !self.shown else { return }
                 self.isHidden = true
-                self.hovering = false
+                self.setHovering(false, animated: false)
             }
         }
     }
@@ -93,20 +108,38 @@ final class CloseStrip: NSView {
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
     }
 
-    override func mouseEntered(with event: NSEvent) { hovering = true }
-    override func mouseExited(with event: NSEvent) { hovering = false }
+    override func mouseEntered(with event: NSEvent) { setHovering(true) }
+    override func mouseExited(with event: NSEvent) { setHovering(false) }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {}
 
     override func mouseUp(with event: NSEvent) {
         if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick?() }
     }
+}
+
+/// Plain layer-backed fill in `Theme.closeHover`, so its opacity can be animated.
+final class FillView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override func draw(_ dirtyRect: NSRect) {
-        if hovering {
-            Theme.closeHover.setFill()
-            bounds.fill()
-        }
+        Theme.closeHover.setFill()
+        bounds.fill()
+    }
+}
+
+/// The faint × centered in its bounds.
+final class CrossGlyphView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
         let r: CGFloat = 4
         let c = NSPoint(x: bounds.midX, y: bounds.midY)
         let path = NSBezierPath()
