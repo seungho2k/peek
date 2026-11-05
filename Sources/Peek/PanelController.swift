@@ -27,6 +27,8 @@ final class PanelController: NSObject {
     /// False right after a forced close while the cursor may be on the edge; re-armed once
     /// the cursor leaves the edge.
     private var edgeTriggerArmed = true
+    /// A pinned panel hidden because Mission Control opened; shown again when it closes.
+    private var hiddenForOverlay = false
     /// Start of an ⌥-drag resize: mouse location and panel depth at mouse-down.
     private var optionResize: (point: NSPoint, depth: CGFloat)?
     /// A mouse button went down inside the panel and is still held.
@@ -268,7 +270,7 @@ final class PanelController: NSObject {
                 if !atEdge { edgeTriggerArmed = true }
                 return
             }
-            if atEdge && !SystemState.isDockOverlayActive() { show() }
+            if atEdge && !hiddenForOverlay && !SystemState.isMissionControlActive() { show() }
             return
         }
 
@@ -370,14 +372,23 @@ final class PanelController: NSObject {
     private func startOverlayWatch() {
         guard overlayWatchTimer == nil else { return }
         let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, SystemState.isDockOverlayActive() else { return }
-                self.isPinned = false
-                self.hideImmediately()
-            }
+            MainActor.assumeIsolated { self?.checkOverlay() }
         }
         RunLoop.main.add(timer, forMode: .common)
         overlayWatchTimer = timer
+    }
+
+    /// Mission Control: a pinned panel hides and comes back afterwards; an unpinned one just hides.
+    private func checkOverlay() {
+        let overlay = SystemState.isMissionControlActive()
+        if hiddenForOverlay {
+            guard !overlay else { return }
+            hiddenForOverlay = false
+            show()
+        } else if overlay {
+            hiddenForOverlay = isPinned
+            hideImmediately(keepWatching: isPinned)
+        }
     }
 
     private func stopOverlayWatch() {
@@ -391,14 +402,14 @@ final class PanelController: NSObject {
         animate(to: 0)
     }
 
-    private func hideImmediately() {
+    private func hideImmediately(keepWatching: Bool = false) {
         animTimer?.invalidate()
         animTimer = nil
         target = 0
         progress = 0
         returnFocus()
         panel.orderOut(nil)
-        stopOverlayWatch()
+        if !keepWatching { stopOverlayWatch() }
         editor.saveNow()
     }
 
@@ -410,6 +421,7 @@ final class PanelController: NSObject {
     /// Global hotkey: open + pin without taking focus. When pinned: unpin and fade out even
     /// if the mouse is over the panel. When open but not pinned: pin.
     func hotKeyPressed() {
+        hiddenForOverlay = false
         if target == 0 {
             isPinned = true
             show()
@@ -470,7 +482,7 @@ final class PanelController: NSObject {
     private func finishAnimation() {
         if target == 0 {
             panel.orderOut(nil)
-            stopOverlayWatch()
+            if !hiddenForOverlay { stopOverlayWatch() }
             editor.saveNow()
         }
     }
@@ -559,6 +571,7 @@ final class PanelController: NSObject {
     // MARK: Changes
 
     private func edgeChanged() {
+        hiddenForOverlay = false
         liveDepth = nil
         depthBeforeFill = nil
         hideImmediately()

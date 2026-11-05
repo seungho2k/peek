@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         report("during mission control")
                         NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Mission Control.app"))
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { exit(0) }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { report("after mission control"); exit(0) }
                     }
                     return
                 }
