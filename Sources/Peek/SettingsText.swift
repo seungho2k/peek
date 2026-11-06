@@ -15,7 +15,7 @@ import AppKit
 @MainActor
 enum SettingsText {
     private static let shortcutKeys: [(key: String, action: ShortcutAction)] = [
-        ("toggle", .pin), ("bold", .bold), ("rule", .rule), ("fill", .fill), ("settings", .settings),
+        ("toggle", .pin), ("bold", .bold), ("strike", .strike), ("rule", .rule), ("fill", .fill), ("settings", .settings),
     ]
 
     static func format(_ s: Settings) -> String {

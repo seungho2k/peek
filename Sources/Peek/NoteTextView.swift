@@ -611,6 +611,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     func perform(_ action: ShortcutAction) {
         switch action {
         case .bold: toggleBold()
+        case .strike: toggleStrike()
         case .rule: insertRule()
         case .pin: break  // global hotkey, handled by PanelController
         case .settings: onOpenSettings?()
@@ -620,39 +621,51 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
 
     private var selectedLines: [NSRange] { lines(in: selectedRange()) }
 
-    private func toggleBold() {
+    private func toggleBold() { toggleLineFormat(.peekBold) }
+    private func toggleStrike() { toggleLineFormat(.peekStrike) }
+
+    /// Toggles a whole-line format (bold / strikethrough) on the selected text lines; on an
+    /// empty line it applies to what's typed next.
+    private func toggleLineFormat(_ key: NSAttributedString.Key) {
         guard let storage = textStorage else { return }
         let textLines = selectedLines.filter { kind(of: $0) == .text }
         let nonEmpty = textLines.filter { $0.length > 0 }
 
         if nonEmpty.isEmpty {
-            // Empty line: toggle bold for what's typed next.
             guard !textLines.isEmpty else { return }
-            var attrs = baseAttributes
-            if typingAttributes[.peekBold] == nil {
-                attrs[.peekBold] = true
-                attrs[.font] = Theme.boldFont
-            }
-            typingAttributes = attrs
+            var attrs = typingAttributes
+            if attrs[key] == nil { attrs[key] = true } else { attrs[key] = nil }
+            typingAttributes = Self.styled(attrs, base: baseAttributes)
             return
         }
 
-        let makeBold = !nonEmpty.allSatisfy { NoteFormat.isBold(storage, line: $0) }
+        var on = false
+        for line in nonEmpty {
+            var found = false
+            storage.enumerateAttribute(key, in: line) { v, _, stop in if v != nil { found = true; stop.pointee = true } }
+            if !found { on = true; break }
+        }
         changeAttributes(of: nonEmpty) { storage in
             for line in nonEmpty {
-                if makeBold {
-                    storage.addAttribute(.peekBold, value: true, range: line)
-                } else {
-                    storage.removeAttribute(.peekBold, range: line)
-                }
+                if on { storage.addAttribute(key, value: true, range: line) } else { storage.removeAttribute(key, range: line) }
             }
         }
+        // Keep typing in the caret's line format.
+        let caretLine = line(at: selectedRange().location)
         var attrs = baseAttributes
-        if makeBold {
-            attrs[.peekBold] = true
-            attrs[.font] = Theme.boldFont
+        if caretLine.length > 0 {
+            if NoteFormat.isBold(storage, line: caretLine) { attrs[.peekBold] = true }
+            if NoteFormat.isStruck(storage, line: caretLine) { attrs[.peekStrike] = true }
         }
-        typingAttributes = attrs
+        typingAttributes = Self.styled(attrs, base: baseAttributes)
+    }
+
+    /// Base attributes plus the font/strikethrough that the format marks in `attrs` imply.
+    private static func styled(_ attrs: [NSAttributedString.Key: Any], base: [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any] {
+        var out = base
+        if attrs[.peekBold] != nil { out[.peekBold] = true; out[.font] = Theme.boldFont }
+        if attrs[.peekStrike] != nil { out[.peekStrike] = true; out[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+        return out
     }
 
     private func insertRule() {

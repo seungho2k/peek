@@ -51,6 +51,7 @@ enum SelfTest {
         links()
         settingsText()
         autoBold()
+        strike()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -413,7 +414,7 @@ enum SelfTest {
     private static func settingsText() {
         let formatted = SettingsText.format(Settings.shared)
         let (changes, invalid) = SettingsText.parse(formatted)
-        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 11)
+        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 12)
 
         for (text, code, mods) in [("cmd+-", KeyCode.minus, NSEvent.ModifierFlags.command),
                                    ("opt+space", KeyCode.space, .option),
@@ -468,6 +469,22 @@ enum SelfTest {
         type(off, "title")
         check("option off: plain", off, "title")
         NoteFormat.autoBoldFirstLine = saved
+    }
+
+    private static func strike() {
+        let md = "a\n~~done~~\n**~~both~~**\n**b**"
+        check("strike round trip", makeView(md), md)
+        let tv = makeView("task")
+        caret(tv, 2)
+        tv.perform(.strike)
+        check("strike toggles on", tv, "~~task~~")
+        let struck = (tv.textStorage!.attribute(.strikethroughStyle, at: 1, effectiveRange: nil) as? Int ?? 0) != 0
+        expect("strike draws a line through", struck)
+        tv.perform(.bold)
+        check("bold + strike", tv, "**~~task~~**")
+        tv.perform(.strike)
+        check("strike toggles off, bold stays", tv, "**task**")
+        expect("either nesting order parses", makeView("~~**x**~~").markdown() == "**~~x~~**")
     }
 
     private static func undo() {

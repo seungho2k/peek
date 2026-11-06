@@ -72,6 +72,7 @@ extension NoteTextView {
     private static func richTextForExport(_ s: NSAttributedString) -> NSAttributedString {
         let out = NSMutableAttributedString(attributedString: s)
         out.removeAttribute(.peekBold, range: NSRange(location: 0, length: out.length))
+        out.removeAttribute(.peekStrike, range: NSRange(location: 0, length: out.length))
         var replacements: [(NSRange, NSAttributedString)] = []
         out.enumerateAttribute(.attachment, in: NSRange(location: 0, length: out.length)) { value, range, _ in
             switch value {

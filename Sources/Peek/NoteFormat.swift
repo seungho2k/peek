@@ -3,6 +3,8 @@ import AppKit
 extension NSAttributedString.Key {
     /// Marks the characters of a line that is bold as a whole.
     static let peekBold = NSAttributedString.Key("peekBold")
+    /// Marks the characters of a line that is struck through as a whole.
+    static let peekStrike = NSAttributedString.Key("peekStrike")
 }
 
 /// Kind of a line ("paragraph") in the note.
@@ -18,7 +20,7 @@ enum LineKind: Equatable {
 /// On disk, one line per paragraph:
 ///   `---`                      horizontal rule
 ///   `![](images/a.png)![](…)`  image line (one or more images)
-///   `**text**`                 bold line
+///   `**text**`, `~~text~~`     bold / struck-through line (both: `**~~text~~**`)
 ///   anything else              plain text
 @MainActor
 enum NoteFormat {
@@ -98,15 +100,28 @@ enum NoteFormat {
             for name in names { s.append(attachmentString(ImageAttachment(name: name))) }
             return s
         }
-        if line.count >= 5, line.hasPrefix("**"), line.hasSuffix("**") {
-            let inner = String(line.dropFirst(2).dropLast(2))
-            if !inner.trimmingCharacters(in: .whitespaces).isEmpty {
-                var attrs = baseAttributes
+        // Whole-line formats: **bold**, ~~strike~~, or both (either nesting order).
+        var inner = line
+        var attrs = baseAttributes
+        while true {
+            if attrs[.peekBold] == nil, let stripped = unwrap(inner, "**") {
+                inner = stripped
                 attrs[.peekBold] = true
-                return NSAttributedString(string: inner, attributes: attrs)
+            } else if attrs[.peekStrike] == nil, let stripped = unwrap(inner, "~~") {
+                inner = stripped
+                attrs[.peekStrike] = true
+            } else {
+                break
             }
         }
-        return NSAttributedString(string: line, attributes: baseAttributes)
+        return NSAttributedString(string: inner, attributes: attrs)
+    }
+
+    /// `marker…marker` → the text inside, if it isn't blank.
+    private static func unwrap(_ s: String, _ marker: String) -> String? {
+        guard s.count >= 2 * marker.count + 1, s.hasPrefix(marker), s.hasSuffix(marker) else { return nil }
+        let inner = String(s.dropFirst(marker.count).dropLast(marker.count))
+        return inner.trimmingCharacters(in: .whitespaces).isEmpty ? nil : inner
     }
 
     /// If the line consists solely of image references, returns their file names.
@@ -158,8 +173,11 @@ enum NoteFormat {
         case .text:
             let line = (text.string as NSString).substring(with: range)
                 .replacingOccurrences(of: String(attachmentChar), with: "")
-            guard isBold(text, line: range), !line.trimmingCharacters(in: .whitespaces).isEmpty else { return line }
-            return "**" + line + "**"
+            guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { return line }
+            var out = line
+            if isStruck(text, line: range) { out = "~~" + out + "~~" }
+            if isBold(text, line: range) { out = "**" + out + "**" }
+            return out
         }
     }
 
@@ -205,11 +223,19 @@ enum NoteFormat {
     }
 
     static func isBold(_ text: NSAttributedString, line range: NSRange) -> Bool {
-        var bold = false
-        text.enumerateAttribute(.peekBold, in: range) { value, _, stop in
-            if value != nil { bold = true; stop.pointee = true }
+        has(.peekBold, text, range)
+    }
+
+    static func isStruck(_ text: NSAttributedString, line range: NSRange) -> Bool {
+        has(.peekStrike, text, range)
+    }
+
+    private static func has(_ key: NSAttributedString.Key, _ text: NSAttributedString, _ range: NSRange) -> Bool {
+        var found = false
+        text.enumerateAttribute(key, in: range) { value, _, stop in
+            if value != nil { found = true; stop.pointee = true }
         }
-        return bold
+        return found
     }
 
     // MARK: Styling
@@ -260,10 +286,16 @@ enum NoteFormat {
             } else {
                 ensureFont(storage, withBreak, bold: false)
             }
-            ensureBoldMark(storage, line, on: bold)
+            let strike = isText && isStruck(storage, line: line)  // saved as ~~…~~
+            ensureMark(.peekBold, storage, line, on: bold)
+            ensureMark(.peekStrike, storage, line, on: strike)
+            ensureStrikethrough(storage, line, on: strike)
             if kind(of: storage, line: line) == .text { ensureLink(storage, line) }
             if withBreak.length > line.length {
-                ensureBoldMark(storage, NSRange(location: NSMaxRange(line), length: 1), on: false)
+                let lineBreak = NSRange(location: NSMaxRange(line), length: 1)
+                ensureMark(.peekBold, storage, lineBreak, on: false)
+                ensureMark(.peekStrike, storage, lineBreak, on: false)
+                ensureStrikethrough(storage, lineBreak, on: false)
             }
         }
     }
@@ -301,17 +333,32 @@ enum NoteFormat {
         for r in fixes { storage.addAttribute(.foregroundColor, value: Theme.text, range: r) }
     }
 
-    private static func ensureBoldMark(_ storage: NSTextStorage, _ range: NSRange, on: Bool) {
+    private static func ensureMark(_ key: NSAttributedString.Key, _ storage: NSTextStorage, _ range: NSRange, on: Bool) {
         guard range.length > 0 else { return }
         var fixes: [NSRange] = []
-        storage.enumerateAttribute(.peekBold, in: range) { value, r, _ in
+        storage.enumerateAttribute(key, in: range) { value, r, _ in
             if (value != nil) != on { fixes.append(r) }
         }
         for r in fixes {
             if on {
-                storage.addAttribute(.peekBold, value: true, range: r)
+                storage.addAttribute(key, value: true, range: r)
             } else {
-                storage.removeAttribute(.peekBold, range: r)
+                storage.removeAttribute(key, range: r)
+            }
+        }
+    }
+
+    private static func ensureStrikethrough(_ storage: NSTextStorage, _ range: NSRange, on: Bool) {
+        guard range.length > 0 else { return }
+        var fixes: [NSRange] = []
+        storage.enumerateAttribute(.strikethroughStyle, in: range) { value, r, _ in
+            if ((value as? Int ?? 0) != 0) != on { fixes.append(r) }
+        }
+        for r in fixes {
+            if on {
+                storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: r)
+            } else {
+                storage.removeAttribute(.strikethroughStyle, range: r)
             }
         }
     }
