@@ -6,6 +6,8 @@
     <string>en</string>
     <key>CFBundleExecutable</key>
     <string>peek</string>
+    <key>CFBundleIconFile</key>
+    <string>peek</string>
     <key>CFBundleIdentifier</key>
     <string>com.seungho.peek</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -17,9 +19,11 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.1.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
     <key>LSMinimumSystemVersion</key>
     <string>27.0</string>
     <key>LSUIElement</key>

@@ -14,14 +14,13 @@ enum PeekEdge: String, CaseIterable, Identifiable {
 }
 
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
-    case bold, strike, rule, fill, pin, settings
+    case bold, strike, rule, pin, settings
     var id: String { rawValue }
     var title: String {
         switch self {
         case .bold: "Bold Line"
         case .strike: "Strikethrough Line"
         case .rule: "Horizontal Rule"
-        case .fill: "Toggle Fill Screen"
         case .pin: "Show / Hide peek (Global)"
         case .settings: "Open Settings"
         }
@@ -31,7 +30,6 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         case .bold: Shortcut(keyCode: KeyCode.b, modifiers: .command)
         case .strike: Shortcut(keyCode: KeyCode.d, modifiers: .command)
         case .rule: Shortcut(keyCode: KeyCode.l, modifiers: .command)
-        case .fill: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
         case .pin: Shortcut(keyCode: KeyCode.space, modifiers: .option)
         case .settings: Shortcut(keyCode: KeyCode.comma, modifiers: .command)
         }
@@ -51,14 +49,9 @@ final class Settings: ObservableObject {
     @Published var edge: PeekEdge {
         didSet { defaults.set(edge.rawValue, forKey: "edge") }
     }
-    /// Slide-in duration in milliseconds.
-    @Published var slideInMs: Double {
-        didSet { defaults.set(slideInMs, forKey: "slideInMs") }
-    }
-    /// Slide-out duration in milliseconds.
-    @Published var slideOutMs: Double {
-        didSet { defaults.set(slideOutMs, forKey: "slideOutMs") }
-    }
+    /// Slide-in/out durations in milliseconds (fixed; no longer a setting).
+    static let slideInMs: Double = 100
+    static let slideOutMs: Double = 100
     /// Panel width when peeking from the left or right edge.
     @Published var sideWidth: CGFloat {
         didSet { defaults.set(Double(sideWidth), forKey: "sideWidth") }
@@ -66,6 +59,10 @@ final class Settings: ObservableObject {
     /// Checks whether a global shortcut can be registered (set by the panel controller).
     var canUseGlobalShortcut: ((Shortcut) -> Bool)?
 
+    /// Show line numbers in the left gutter (note and settings).
+    @Published var showLineNumbers: Bool {
+        didSet { defaults.set(showLineNumbers, forKey: "showLineNumbers") }
+    }
     /// Line 00 of every section is shown in bold.
     @Published var autoBoldFirstLine: Bool {
         didSet { defaults.set(autoBoldFirstLine, forKey: "autoBoldFirstLine") }
@@ -86,15 +83,15 @@ final class Settings: ObservableObject {
 
     private init() {
         edge = PeekEdge(rawValue: defaults.string(forKey: "edge") ?? "") ?? .right
-        slideInMs = defaults.object(forKey: "slideInMs") as? Double ?? 150
-        slideOutMs = defaults.object(forKey: "slideOutMs") as? Double ?? 120
+        for old in ["slideInMs", "slideOutMs"] { defaults.removeObject(forKey: old) }  // animation settings removed
         defaults.removeObject(forKey: "hideMargin")  // setting removed
         minDepth = max(defaults.object(forKey: "minDepth") as? Double ?? 200, Self.minimumWidthFloor)
         defaults.removeObject(forKey: "ruleStyle")  // setting removed (full-width rules)
         sideWidth = CGFloat(defaults.object(forKey: "sideWidth") as? Double ?? Double(Self.defaultSideWidth))
         defaults.removeObject(forKey: "bottomHeight")  // bottom edge removed
         autoBoldFirstLine = defaults.object(forKey: "autoBoldFirstLine") as? Bool ?? true
-        for old in ["showLineNumbers", "lineNumbers"] { defaults.removeObject(forKey: old) }  // settings removed
+        defaults.removeObject(forKey: "lineNumbers")  // old key
+        showLineNumbers = defaults.object(forKey: "showLineNumbers") as? Bool ?? true
 
         var sc: [ShortcutAction: Shortcut] = [:]
         if let data = defaults.data(forKey: "shortcuts"),
@@ -109,7 +106,7 @@ final class Settings: ObservableObject {
         }
         // v2 had an in-panel ⌘P pin toggle; pin is now a global ⌥Space hotkey.
         if version < 3, sc[.pin] == Shortcut(keyCode: KeyCode.p, modifiers: .command) { sc[.pin] = nil }
-        // v3 used ⌘↩ for the rule; ⌘↩ now toggles fill and the rule moved to ⌘-.
+        // v3 used ⌘↩ for the rule; the rule moved to ⌘-.
         if version < 4, sc[.rule] == Shortcut(keyCode: KeyCode.returnKey, modifiers: .command) { sc[.rule] = nil }
         // v4 used ⌘- for the rule; it's ⌘L now (the list shortcut was removed).
         if version < 5, sc[.rule] == Shortcut(keyCode: KeyCode.minus, modifiers: .command) { sc[.rule] = nil }

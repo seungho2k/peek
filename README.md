@@ -23,7 +23,7 @@ scripts/install.sh        # release 빌드 → /Applications/peek.app 설치 후
 
 - ⌥Space로 노트를 열고 닫는다(전역). 노트는 화면 오른쪽 끝(설정에서 왼쪽/아래로 변경)에 붙는다. 입력하려면 노트를 클릭.
 - 설정: 노트에서 ⌘, 또는 peek를 한 번 더 실행 → 노트 옆에 텍스트 설정이 뜬다(`key: value`를 고치면 바로 반영).
-- 단축키(기본): ⌘B 굵게, ⌘D 취소선, ⌘L 수평선, ⌘↩ 화면 가득 토글, ⌥Space 열기/닫기(전역), Ctrl+H/J/K/L 방향키.
+- 단축키(기본): ⌘B 굵게, ⌘D 취소선, ⌘L 수평선, ⌥Space 열기/닫기(전역), Ctrl+H/J/K/L 방향키.
 - 데이터: `~/Library/Application Support/peek/note.md`, `images/`.
 
 ## 개발

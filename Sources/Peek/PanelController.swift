@@ -36,6 +36,7 @@ final class PanelController: NSObject {
 
     override init() {
         NoteFormat.autoBoldFirstLine = Settings.shared.autoBoldFirstLine
+        Theme.showLineNumbers = Settings.shared.showLineNumbers
         editor = NoteEditor()
         super.init()
         setUpContent()
@@ -47,7 +48,6 @@ final class PanelController: NSObject {
         settings.canUseGlobalShortcut = { [weak self] sc in self?.hotKey.register(sc) ?? false }
         editor.textView.onOpenSettings = { [weak self] in self?.toggleSettings() }
         settingsEditor.onClose = { [weak self] in self?.hideSettings() }
-        editor.textView.onToggleFill = { [weak self] in self?.toggleFill() }
 
         #if DEBUG
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
@@ -107,6 +107,13 @@ final class PanelController: NSObject {
         settings.$shortcuts.dropFirst().sink { [weak self] shortcuts in
             DispatchQueue.main.async { self?.hotKey.register(shortcuts[.pin] ?? ShortcutAction.pin.defaultShortcut) }
         }.store(in: &cancellables)
+        settings.$showLineNumbers.dropFirst().sink { [weak self] on in
+            DispatchQueue.main.async {
+                Theme.showLineNumbers = on
+                self?.editor.textView.restyleAll()
+                self?.settingsEditor.textView.restyleAll()
+            }
+        }.store(in: &cancellables)
         settings.$autoBoldFirstLine.dropFirst().sink { on in
             DispatchQueue.main.async { NoteFormat.autoBoldFirstLine = on }
         }.store(in: &cancellables)
@@ -157,11 +164,6 @@ final class PanelController: NSObject {
 
     private func clampDepth(_ value: CGFloat, on screen: NSScreen) -> CGFloat {
         min(max(value, CGFloat(settings.minDepth)), maxDepth(on: screen)).rounded()
-    }
-
-    private var isFull: Bool {
-        guard let screen = targetScreen else { return false }
-        return depth(for: screen) >= maxDepth(on: screen) - 0.5
     }
 
     private func frame(on screen: NSScreen) -> NSRect {
@@ -246,7 +248,7 @@ final class PanelController: NSObject {
         target = newTarget
         animFrom = progress
         animStart = CACurrentMediaTime()
-        let ms = newTarget > progress ? settings.slideInMs : settings.slideOutMs
+        let ms = newTarget > progress ? Settings.slideInMs : Settings.slideOutMs
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         animDuration = reduceMotion ? 0 : ms / 1000 * Double(abs(newTarget - progress))
 
@@ -289,8 +291,6 @@ final class PanelController: NSObject {
     /// Depth while a resize drag is in progress; persisted to settings when the drag ends,
     /// so dragging doesn't write preferences on every mouse event.
     private var liveDepth: CGFloat?
-    /// Depth before ⌘↩ filled the screen; ⌘↩ again restores it.
-    private var depthBeforeFill: CGFloat?
 
     private func setDepth(_ value: CGFloat, persist: Bool) {
         guard let screen = targetScreen else { return }
@@ -308,19 +308,6 @@ final class PanelController: NSObject {
         if let d = liveDepth { setDepth(d, persist: true) }
     }
 
-    /// ⌘↩: fill the screen, or restore the size from before. Does nothing if the panel was
-    /// made full by hand (there is no size to go back to).
-    func toggleFill() {
-        guard let screen = targetScreen else { return }
-        if let previous = depthBeforeFill {
-            depthBeforeFill = nil
-            setDepth(previous, persist: true)
-        } else if !isFull {
-            depthBeforeFill = depth(for: screen)
-            setDepth(maxDepth(on: screen), persist: true)
-        }
-    }
-
     /// ⌥ + drag anywhere in the panel resizes it (relative to where the drag started).
     private func handleOptionResize(_ event: NSEvent) -> Bool {
         switch event.type {
@@ -328,7 +315,6 @@ final class PanelController: NSObject {
             guard event.window === panel, event.modifierFlags.contains(.option) else { return false }
             guard let screen = targetScreen else { return false }
             optionResize = (NSEvent.mouseLocation, depth(for: screen))
-            depthBeforeFill = nil
             NSCursor.resizeLeftRight.push()
             return true
         case .leftMouseDragged:
@@ -354,7 +340,6 @@ final class PanelController: NSObject {
     private func resize(to point: NSPoint) {
         guard let screen = targetScreen else { return }
         let f = screen.frame
-        depthBeforeFill = nil
         switch settings.edge {
         case .right: setDepth(f.maxX - point.x, persist: false)
         case .left: setDepth(point.x - f.minX, persist: false)
@@ -365,7 +350,6 @@ final class PanelController: NSObject {
 
     private func edgeChanged() {
         liveDepth = nil
-        depthBeforeFill = nil
         applyFrame()
         layoutContent()
     }
