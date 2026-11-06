@@ -18,7 +18,14 @@ final class GlobalHotKey {
         }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &handlerRef)
     }
 
-    func register(_ shortcut: Shortcut) {
+    private(set) var current: Shortcut?
+
+    /// Registers `shortcut`, replacing the current one. If macOS refuses it (e.g. another app
+    /// owns it), the previous shortcut stays registered and this returns false.
+    @discardableResult
+    func register(_ shortcut: Shortcut) -> Bool {
+        if shortcut == current, hotKeyRef != nil { return true }
+        let previous = current
         unregister()
         let f = shortcut.modifierFlags
         var mods: UInt32 = 0
@@ -28,7 +35,14 @@ final class GlobalHotKey {
         if f.contains(.shift) { mods |= UInt32(shiftKey) }
         let id = EventHotKeyID(signature: OSType(0x7065_656B), id: 1)  // 'peek'
         let status = RegisterEventHotKey(UInt32(shortcut.keyCode), mods, id, GetApplicationEventTarget(), 0, &hotKeyRef)
-        if status != noErr { NSLog("peek: hotkey registration failed (\(status))") }
+        guard status == noErr else {
+            NSLog("peek: hotkey registration failed (\(status))")
+            hotKeyRef = nil
+            if let previous, previous != shortcut { register(previous) }
+            return false
+        }
+        current = shortcut
+        return true
     }
 
     func unregister() {

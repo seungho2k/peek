@@ -44,6 +44,7 @@ final class PanelController: NSObject {
 
         hotKey.onPress = { [weak self] in self?.hotKeyPressed() }
         hotKey.register(settings.shortcut(for: .pin))
+        settings.canUseGlobalShortcut = { [weak self] sc in self?.hotKey.register(sc) ?? false }
         editor.textView.onOpenSettings = { [weak self] in self?.toggleSettings() }
         settingsEditor.onClose = { [weak self] in self?.hideSettings() }
         editor.textView.onToggleFill = { [weak self] in self?.toggleFill() }
@@ -198,7 +199,7 @@ final class PanelController: NSObject {
     /// ⌘, (or launching peek again): the note panel shows the settings instead of the note
     /// (same width); opens the panel if needed.
     func showSettings() {
-        settingsEditor.load()
+        if !settingsOpen { settingsEditor.load() }  // keep text being edited (e.g. on relaunch)
         settingsOpen = true
         swapContent()
         if target == 0 { show() }

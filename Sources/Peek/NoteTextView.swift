@@ -680,7 +680,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
             applyEdits([(NSRange(location: first.location, length: 0), s)],
                        selectAfter: NSRange(location: first.location + 2, length: 0))
         } else {
-            let last = line(at: NSMaxRange(sel))
+            let last = lines(in: sel).last ?? line(at: NSMaxRange(sel))
             let end = NSMaxRange(last)
             let s = NSMutableAttributedString(attributedString: plain("\n"))
             s.append(rule)

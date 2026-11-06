@@ -52,6 +52,7 @@ enum SelfTest {
         settingsText()
         autoBold()
         strike()
+        releaseFixes()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
@@ -486,6 +487,38 @@ enum SelfTest {
         tv.perform(.strike)
         check("strike toggles off, bold stays", tv, "**task**")
         expect("either nesting order parses", makeView("~~**x**~~").markdown() == "**~~x~~**")
+    }
+
+    /// Regressions found in the 1.0 review.
+    private static func releaseFixes() {
+        // Triple-clicked line (selection includes its line break) formats only that line.
+        let tv = makeView("a\nb")
+        tv.setSelectedRange(NSRange(location: 0, length: 2))
+        tv.perform(.bold)
+        check("triple-clicked line: bold only that line", tv, "**a**\nb")
+        tv.setSelectedRange(NSRange(location: 0, length: 2))
+        tv.perform(.rule)
+        check("triple-clicked line: rule goes right below it", tv, "**a**\n---\n\nb")
+
+        // Note and settings keep separate undo histories.
+        let note = NoteEditor(loadFromDisk: false)
+        let settingsEditor = SettingsEditor()
+        // Undo is a character change too (that's what triggers saving).
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 300), styleMask: [.titled], backing: .buffered, defer: true)
+        window.contentView = note.scrollView
+        window.makeFirstResponder(note.textView)
+        note.textView.insertText("abc", replacementRange: NSRange(location: NSNotFound, length: 0))
+        note.textView.breakUndoCoalescing()
+        var changes = 0
+        let token = NotificationCenter.default.addObserver(forName: NSTextStorage.didProcessEditingNotification,
+                                                           object: note.textView.textStorage, queue: nil) { n in
+            if (n.object as? NSTextStorage)?.editedMask.contains(.editedCharacters) == true { changes += 1 }
+        }
+        note.textView.undoManager?.undo()
+        NotificationCenter.default.removeObserver(token)
+        expect("undo reverts and counts as an edit (\(note.textView.string.debugDescription))", note.textView.string.isEmpty && changes > 0)
+        expect("note and settings have separate undo managers",
+               note.textView.undoManager != nil && note.textView.undoManager !== settingsEditor.textView.undoManager)
     }
 
     private static func undo() {

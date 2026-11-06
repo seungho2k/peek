@@ -192,10 +192,13 @@ enum NoteFormat {
     }
 
     /// All line content ranges intersecting `range`.
+    /// A non-empty range ending right after a line break (e.g. a triple-clicked line) doesn't
+    /// include the following line.
     static func lineRanges(in string: NSString, covering range: NSRange) -> [NSRange] {
         var result: [NSRange] = []
         var loc = range.location
-        let end = NSMaxRange(range)
+        var end = NSMaxRange(range)
+        if range.length > 0, end > 0, end <= string.length, string.character(at: end - 1) == 0x0A { end -= 1 }
         repeat {
             let line = lineContentRange(in: string, at: loc)
             result.append(line)

@@ -63,6 +63,9 @@ final class Settings: ObservableObject {
     @Published var sideWidth: CGFloat {
         didSet { defaults.set(Double(sideWidth), forKey: "sideWidth") }
     }
+    /// Checks whether a global shortcut can be registered (set by the panel controller).
+    var canUseGlobalShortcut: ((Shortcut) -> Bool)?
+
     /// Line 00 of every section is shown in bold.
     @Published var autoBoldFirstLine: Bool {
         didSet { defaults.set(autoBoldFirstLine, forKey: "autoBoldFirstLine") }

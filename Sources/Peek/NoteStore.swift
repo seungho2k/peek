@@ -31,12 +31,16 @@ final class NoteStore {
         return String(decoding: data, as: UTF8.self)
     }
 
-    func save(_ markdown: String) {
+    /// Returns false if the write failed (the caller keeps the changes marked unsaved).
+    @discardableResult
+    func save(_ markdown: String) -> Bool {
         do {
             try Data(markdown.utf8).write(to: noteURL, options: .atomic)
             knownModificationDate = modificationDate()
+            return true
         } catch {
             NSLog("peek: failed to save note: \(error)")
+            return false
         }
     }
 

@@ -50,6 +50,12 @@ enum SettingsText {
     /// Parses the sections; `invalid` holds indices of lines that couldn't be applied
     /// (unknown key, missing/bad value, or a shortcut used twice).
     static func parse(_ text: String) -> (changes: [Change], invalid: Set<Int>) {
+        let detailed = parseWithLines(text)
+        return (detailed.changes.map(\.change), detailed.invalid)
+    }
+
+    /// Like `parse`, keeping the line each change came from.
+    static func parseWithLines(_ text: String) -> (changes: [(line: Int, change: Change)], invalid: Set<Int>) {
         var changes: [(line: Int, change: Change)] = []
         var invalid: Set<Int> = []
 
@@ -97,7 +103,7 @@ enum SettingsText {
             if case .shortcut(_, let sc) = change { byShortcut[sc, default: []].append(line) }
         }
         for dupes in byShortcut.values where dupes.count > 1 { invalid.formUnion(dupes) }
-        return (changes.filter { !invalid.contains($0.line) }.map(\.change), invalid)
+        return (changes.filter { !invalid.contains($0.line) }, invalid)
     }
 
     private enum Parsed { case ok(Change), unknownKey, badValue }
@@ -133,8 +139,17 @@ enum SettingsText {
         }
     }
 
-    static func apply(_ changes: [Change], to s: Settings) {
-        for change in changes {
+    /// Applies the changes; returns the indices (into `changes`) that were refused — a global
+    /// shortcut that macOS wouldn't register (e.g. taken by another app).
+    @discardableResult
+    static func apply(_ changes: [Change], to s: Settings) -> Set<Int> {
+        var refused: Set<Int> = []
+        for (i, change) in changes.enumerated() {
+            if case .shortcut(.pin, let sc) = change, s.shortcut(for: .pin) != sc,
+               let canUse = s.canUseGlobalShortcut, !canUse(sc) {
+                refused.insert(i)
+                continue
+            }
             switch change {
             case .edge(let e): if s.edge != e { s.edge = e }
             case .minWidth(let n): if s.minDepth != n { s.minDepth = n }
@@ -145,6 +160,7 @@ enum SettingsText {
             case .shortcut(let action, let sc): if s.shortcut(for: action) != sc { s.shortcuts[action] = sc }
             }
         }
+        return refused
     }
 }
 

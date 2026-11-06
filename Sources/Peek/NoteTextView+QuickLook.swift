@@ -42,6 +42,7 @@ extension NoteTextView: QLPreviewPanelDataSource, QLPreviewPanelDelegate {
         previewStartIndex = start
         guard let panel = QLPreviewPanel.shared() else { return }
         if QLPreviewPanel.sharedPreviewPanelExists() && panel.isVisible {
+            previewURLs = noteImageURLs  // the note may have changed since Quick Look opened
             panel.reloadData()
             panel.currentPreviewItemIndex = start
         } else {
@@ -102,6 +103,8 @@ extension NoteTextView: QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     }
 
     nonisolated func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> (any QLPreviewItem)! {
-        MainActor.assumeIsolated { previewURLs[index] as NSURL }
+        MainActor.assumeIsolated {
+            previewURLs.indices.contains(index) ? previewURLs[index] as NSURL : nil
+        }
     }
 }

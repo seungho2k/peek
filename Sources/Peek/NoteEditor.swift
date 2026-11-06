@@ -8,6 +8,8 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
     private let store = NoteStore.shared
     private var saveWorkItem: DispatchWorkItem?
     private var isDirty = false
+    /// The note's own undo history (the settings view lives in the same window).
+    private let undo = UndoManager()
 
     init(loadFromDisk: Bool = true) {
         let storage = NSTextStorage()
@@ -25,6 +27,13 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.delegate = self
+        // Any character change — typing, paste, undo/redo — needs saving.
+        NotificationCenter.default.addObserver(
+            forName: NSTextStorage.didProcessEditingNotification, object: textView.textStorage, queue: nil
+        ) { [weak self] note in  // synchronous: editedMask is only valid during processing
+            guard let storage = note.object as? NSTextStorage, storage.editedMask.contains(.editedCharacters) else { return }
+            MainActor.assumeIsolated { self?.scheduleSave() }
+        }
 
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = false  // scrolls with the trackpad/wheel; no visible bar
@@ -50,8 +59,7 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
         saveWorkItem?.cancel()
         saveWorkItem = nil
         guard isDirty else { return }
-        store.save(textView.markdown())
-        isDirty = false
+        if store.save(textView.markdown()) { isDirty = false }  // on failure, retry next time
     }
 
     private func scheduleSave() {
@@ -63,6 +71,8 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
         saveWorkItem = item
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
     }
+
+    func undoManager(for view: NSTextView) -> UndoManager? { undo }
 
     func textDidChange(_ notification: Notification) {
         scheduleSave()
