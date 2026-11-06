@@ -29,7 +29,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
     var defaultShortcut: Shortcut {
         switch self {
         case .bold: Shortcut(keyCode: KeyCode.b, modifiers: .command)
-        case .strike: Shortcut(keyCode: KeyCode.x, modifiers: [.command, .shift])
+        case .strike: Shortcut(keyCode: KeyCode.d, modifiers: .command)
         case .rule: Shortcut(keyCode: KeyCode.l, modifiers: .command)
         case .fill: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
         case .pin: Shortcut(keyCode: KeyCode.space, modifiers: .option)
@@ -110,7 +110,9 @@ final class Settings: ObservableObject {
         if version < 4, sc[.rule] == Shortcut(keyCode: KeyCode.returnKey, modifiers: .command) { sc[.rule] = nil }
         // v4 used ⌘- for the rule; it's ⌘L now (the list shortcut was removed).
         if version < 5, sc[.rule] == Shortcut(keyCode: KeyCode.minus, modifiers: .command) { sc[.rule] = nil }
-        defaults.set(5, forKey: "shortcutsVersion")
+        // v5 defaulted strike to ⌘⇧X; it's ⌘D now.
+        if version < 6, sc[.strike] == Shortcut(keyCode: KeyCode.x, modifiers: [.command, .shift]) { sc[.strike] = nil }
+        defaults.set(6, forKey: "shortcutsVersion")
         for a in ShortcutAction.allCases where sc[a] == nil { sc[a] = a.defaultShortcut }
         shortcuts = sc
 

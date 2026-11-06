@@ -276,8 +276,15 @@ enum NoteFormat {
             let withBreak = NSRange(location: line.location, length: min(line.length + 1, ns.length - line.location))
             let isText = kind(of: storage, line: line) == .text
             let bold = isText && isBold(storage, line: line)  // saved as **…**
+            let strike = isText && isStruck(storage, line: line)  // saved as ~~…~~
 
-            ensureColor(storage, withBreak)
+            // Struck-through lines fade to the line-number color.
+            if strike && line.length > 0 {
+                ensureColor(storage, line, Theme.lineNumber)
+                ensureColor(storage, NSRange(location: NSMaxRange(line), length: withBreak.length - line.length), Theme.text)
+            } else {
+                ensureColor(storage, withBreak, Theme.text)
+            }
             ensureParagraph(storage, withBreak, kind(of: storage, line: line) == .text
                 ? Theme.textParagraph : Theme.blockParagraph)
             if bold && line.length > 0 {
@@ -286,7 +293,6 @@ enum NoteFormat {
             } else {
                 ensureFont(storage, withBreak, bold: false)
             }
-            let strike = isText && isStruck(storage, line: line)  // saved as ~~…~~
             ensureMark(.peekBold, storage, line, on: bold)
             ensureMark(.peekStrike, storage, line, on: strike)
             ensureStrikethrough(storage, line, on: strike)
@@ -324,13 +330,13 @@ enum NoteFormat {
         for r in fixes { storage.addAttribute(.paragraphStyle, value: style, range: r) }
     }
 
-    private static func ensureColor(_ storage: NSTextStorage, _ range: NSRange) {
+    private static func ensureColor(_ storage: NSTextStorage, _ range: NSRange, _ color: NSColor) {
         guard range.length > 0 else { return }
         var fixes: [NSRange] = []
         storage.enumerateAttribute(.foregroundColor, in: range) { value, r, _ in
-            if (value as? NSColor) !== Theme.text { fixes.append(r) }
+            if (value as? NSColor) !== color { fixes.append(r) }
         }
-        for r in fixes { storage.addAttribute(.foregroundColor, value: Theme.text, range: r) }
+        for r in fixes { storage.addAttribute(.foregroundColor, value: color, range: r) }
     }
 
     private static func ensureMark(_ key: NSAttributedString.Key, _ storage: NSTextStorage, _ range: NSRange, on: Bool) {

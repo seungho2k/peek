@@ -480,6 +480,7 @@ enum SelfTest {
         check("strike toggles on", tv, "~~task~~")
         let struck = (tv.textStorage!.attribute(.strikethroughStyle, at: 1, effectiveRange: nil) as? Int ?? 0) != 0
         expect("strike draws a line through", struck)
+        expect("struck line uses the line-number color", (tv.textStorage!.attribute(.foregroundColor, at: 1, effectiveRange: nil) as? NSColor) === Theme.lineNumber)
         tv.perform(.bold)
         check("bold + strike", tv, "**~~task~~**")
         tv.perform(.strike)
