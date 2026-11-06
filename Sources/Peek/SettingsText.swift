@@ -8,14 +8,14 @@ import AppKit
 ///     edge: right
 ///     min-width: 200
 ///     ---
-///     **animations**
+///     **keyboard shortcuts**
 ///     …
 ///
 /// The parser also accepts the value on the line after `key:`.
 @MainActor
 enum SettingsText {
     private static let shortcutKeys: [(key: String, action: ShortcutAction)] = [
-        ("toggle", .pin), ("bold", .bold), ("strike", .strike), ("rule", .rule), ("fill", .fill), ("settings", .settings),
+        ("toggle", .pin), ("bold", .bold), ("strike", .strike), ("rule", .rule), ("settings", .settings),
     ]
 
     static func format(_ s: Settings) -> String {
@@ -23,12 +23,9 @@ enum SettingsText {
             ("preferences", [
                 ("edge", s.edge.rawValue),
                 ("min-width", "\(Int(s.minDepth))"),
-                ("launch-at-login", s.launchAtLogin ? "on" : "off"),
-                ("bold-first-line", s.autoBoldFirstLine ? "on" : "off"),
-            ]),
-            ("animations", [
-                ("fade-in", "\(Int(s.slideInMs))"),
-                ("fade-out", "\(Int(s.slideOutMs))"),
+                ("launch-at-login", "\(s.launchAtLogin)"),
+                ("bold-first-line", "\(s.autoBoldFirstLine)"),
+                ("line-numbers", "\(s.showLineNumbers)"),
             ]),
             ("keyboard shortcuts", shortcutKeys.map { ($0.key, ShortcutText.format(s.shortcut(for: $0.action))) }),
         ]
@@ -40,10 +37,9 @@ enum SettingsText {
     enum Change: Equatable {
         case edge(PeekEdge)
         case minWidth(Double)
-        case fadeIn(Double)
-        case fadeOut(Double)
         case launchAtLogin(Bool)
         case autoBoldFirstLine(Bool)
+        case lineNumbers(Bool)
         case shortcut(ShortcutAction, Shortcut)
     }
 
@@ -109,10 +105,10 @@ enum SettingsText {
     private enum Parsed { case ok(Change), unknownKey, badValue }
 
     private static func parseValue(key: String, value: String) -> Parsed {
-        func onOff(_ v: String) -> Bool? {
+        func bool(_ v: String) -> Bool? {
             switch v {
-            case "on", "yes", "true": true
-            case "off", "no", "false": false
+            case "true": true
+            case "false": false
             default: nil
             }
         }
@@ -123,13 +119,12 @@ enum SettingsText {
             // Anything below 100 — or not a number — means 100.
             let n = min(Double(value) ?? Settings.minimumWidthFloor, 3000)
             return .ok(.minWidth(max(n, Settings.minimumWidthFloor)))
-        case "fade-in", "fade-out":
-            guard let n = Double(value), (0...5000).contains(n) else { return .badValue }
-            return .ok(key == "fade-in" ? .fadeIn(n) : .fadeOut(n))
         case "launch-at-login":
-            return onOff(value).map { .ok(.launchAtLogin($0)) } ?? .badValue
+            return bool(value).map { .ok(.launchAtLogin($0)) } ?? .badValue
         case "bold-first-line":
-            return onOff(value).map { .ok(.autoBoldFirstLine($0)) } ?? .badValue
+            return bool(value).map { .ok(.autoBoldFirstLine($0)) } ?? .badValue
+        case "line-numbers":
+            return bool(value).map { .ok(.lineNumbers($0)) } ?? .badValue
         default:
             guard let action = shortcutKeys.first(where: { $0.key == key })?.action else { return .unknownKey }
             guard let sc = ShortcutText.parse(value),
@@ -153,10 +148,9 @@ enum SettingsText {
             switch change {
             case .edge(let e): if s.edge != e { s.edge = e }
             case .minWidth(let n): if s.minDepth != n { s.minDepth = n }
-            case .fadeIn(let n): if s.slideInMs != n { s.slideInMs = n }
-            case .fadeOut(let n): if s.slideOutMs != n { s.slideOutMs = n }
             case .launchAtLogin(let on): if s.launchAtLogin != on { s.launchAtLogin = on }
             case .autoBoldFirstLine(let on): if s.autoBoldFirstLine != on { s.autoBoldFirstLine = on }
+            case .lineNumbers(let on): if s.showLineNumbers != on { s.showLineNumbers = on }
             case .shortcut(let action, let sc): if s.shortcut(for: action) != sc { s.shortcuts[action] = sc }
             }
         }

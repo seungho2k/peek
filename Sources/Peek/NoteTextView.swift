@@ -8,7 +8,6 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     var onOpenSettings: (() -> Void)?
 
     var baseAttributes: [NSAttributedString.Key: Any] { NoteFormat.baseAttributes }
-    var onToggleFill: (() -> Void)?
 
     /// Quick Look state (see NoteTextView+QuickLook).
     var previewURLs: [URL] = []
@@ -92,6 +91,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// Image and rule lines are not counted; numbering restarts at 00 after every rule.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
+        guard Theme.showLineNumbers else { return }
         let right = textContainerOrigin.x + Theme.gutterWidth - Theme.spaceWidth
         enumerateLineNumbers(in: rect) { number, labelTop in
             LineNumberLabel.draw(number, rightEdge: right, top: labelTop)
@@ -615,7 +615,6 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         case .rule: insertRule()
         case .pin: break  // global hotkey, handled by PanelController
         case .settings: onOpenSettings?()
-        case .fill: onToggleFill?()
         }
     }
 
