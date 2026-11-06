@@ -13,6 +13,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Peek" "$APP/Contents/MacOS/peek"
 cp Support/Info.plist "$APP/Contents/Info.plist"
 cp -R Support/Fonts "$APP/Contents/Resources/Fonts"
+cp Support/peek.icns "$APP/Contents/Resources/peek.icns"
 codesign --force --sign - "$APP" >/dev/null
 
 echo "$APP"
