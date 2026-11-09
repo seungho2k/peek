@@ -3,7 +3,7 @@ import AppKit
 /// Owns the scroll view + text view and keeps them in sync with note.md.
 @MainActor
 final class NoteEditor: NSObject, NSTextViewDelegate {
-    let scrollView = NSScrollView()
+    let scrollView = SnapScrollView()
     let textView: NoteTextView
     private let store = NoteStore.shared
     private var saveWorkItem: DispatchWorkItem?
@@ -36,6 +36,7 @@ final class NoteEditor: NSObject, NSTextViewDelegate {
         }
 
         scrollView.documentView = textView
+        scrollView.snapOffsets = { [weak textView] in textView?.ruleSnapOffsets() ?? [] }
         scrollView.hasVerticalScroller = false  // scrolls with the trackpad/wheel; no visible bar
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true

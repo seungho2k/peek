@@ -14,7 +14,7 @@ enum PeekEdge: String, CaseIterable, Identifiable {
 }
 
 enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
-    case bold, strike, rule, pin, settings
+    case bold, strike, rule, pin, fillWindow, settings
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -22,15 +22,19 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         case .strike: "Strikethrough Line"
         case .rule: "Horizontal Rule"
         case .pin: "Show / Hide peek (Global)"
+        case .fillWindow: "Fill Focused Window (Global)"
         case .settings: "Open Settings"
         }
     }
+    /// System-wide hotkeys (registered with macOS), as opposed to keys inside the panel.
+    var isGlobal: Bool { self == .pin || self == .fillWindow }
     var defaultShortcut: Shortcut {
         switch self {
         case .bold: Shortcut(keyCode: KeyCode.b, modifiers: .command)
         case .strike: Shortcut(keyCode: KeyCode.d, modifiers: .command)
         case .rule: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
         case .pin: Shortcut(keyCode: KeyCode.space, modifiers: .option)
+        case .fillWindow: Shortcut(keyCode: KeyCode.returnKey, modifiers: [.control, .option])
         case .settings: Shortcut(keyCode: KeyCode.comma, modifiers: .command)
         }
     }
@@ -57,8 +61,16 @@ final class Settings: ObservableObject {
         didSet { defaults.set(Double(sideWidth), forKey: "sideWidth") }
     }
     /// Checks whether a global shortcut can be registered (set by the panel controller).
-    var canUseGlobalShortcut: ((Shortcut) -> Bool)?
+    var canUseGlobalShortcut: ((ShortcutAction, Shortcut) -> Bool)?
 
+    /// While peek is shown, other windows are moved out of its way (and put back when it hides).
+    @Published var makeRoom: Bool {
+        didSet { defaults.set(makeRoom, forKey: "makeRoom") }
+    }
+    /// Fade the panel in and out; false shows/hides it instantly.
+    @Published var animation: Bool {
+        didSet { defaults.set(animation, forKey: "animation") }
+    }
     /// Show line numbers in the left gutter (note and settings).
     @Published var showLineNumbers: Bool {
         didSet { defaults.set(showLineNumbers, forKey: "showLineNumbers") }
@@ -92,6 +104,8 @@ final class Settings: ObservableObject {
         autoBoldFirstLine = defaults.object(forKey: "autoBoldFirstLine") as? Bool ?? true
         defaults.removeObject(forKey: "lineNumbers")  // old key
         showLineNumbers = defaults.object(forKey: "showLineNumbers") as? Bool ?? true
+        makeRoom = defaults.object(forKey: "makeRoom") as? Bool ?? true
+        animation = defaults.object(forKey: "animation") as? Bool ?? true
 
         var sc: [ShortcutAction: Shortcut] = [:]
         if let data = defaults.data(forKey: "shortcuts"),
@@ -114,8 +128,9 @@ final class Settings: ObservableObject {
         if version < 6, sc[.strike] == Shortcut(keyCode: KeyCode.x, modifiers: [.command, .shift]) { sc[.strike] = nil }
         // v6 defaulted the rule to ⌘L; ⌘H/J/K/L are arrow keys now and the rule is ⌘↩.
         // Any action still on a reserved arrow key goes back to its default.
-        if version < 7 { for (a, s) in sc where s.isReservedArrow { sc[a] = nil } }
-        defaults.set(7, forKey: "shortcutsVersion")
+        // v7 added ⌘0–⌘9 (jump to section) to the reserved keys.
+        if version < 8 { for (a, s) in sc where s.isReserved { sc[a] = nil } }
+        defaults.set(8, forKey: "shortcutsVersion")
         for a in ShortcutAction.allCases where sc[a] == nil { sc[a] = a.defaultShortcut }
         shortcuts = sc
 
@@ -128,7 +143,7 @@ final class Settings: ObservableObject {
 
     /// In-panel shortcut for a key event. The pin shortcut is a global hotkey, handled elsewhere.
     func action(matching event: NSEvent) -> ShortcutAction? {
-        ShortcutAction.allCases.first { $0 != .pin && shortcut(for: $0).matches(event) }
+        ShortcutAction.allCases.first { !$0.isGlobal && shortcut(for: $0).matches(event) }
     }
 
     func resetShortcuts() {

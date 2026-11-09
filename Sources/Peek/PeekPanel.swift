@@ -12,7 +12,8 @@ final class PeekPanel: NSPanel {
         )
         isFloatingPanel = true
         level = .statusBar
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        // .transient (not .stationary): on every Space, but hidden while Mission Control shows.
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         hidesOnDeactivate = false
         becomesKeyOnlyIfNeeded = false
         isMovable = false

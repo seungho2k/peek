@@ -21,3 +21,15 @@ enum LineNumberLabel {
         }
     }
 }
+
+/// A section's index (one digit, 0–9) in the body font's Black weight and the line-number color,
+/// baseline-aligned with the section's first line.
+enum SectionIndexLabel {
+    static func draw(_ index: Int, rightEdge: CGFloat, lineTop: CGFloat) {
+        let attrs: [NSAttributedString.Key: Any] = [.font: Theme.boldFont, .foregroundColor: Theme.lineNumber]
+        let digit = String(index % 10) as NSString
+        let baseline = NSLayoutManager().defaultBaselineOffset(for: Theme.boldFont)
+        let top = lineTop + Theme.lineMetrics.baseline - baseline
+        digit.draw(at: NSPoint(x: rightEdge - digit.size(withAttributes: attrs).width, y: top), withAttributes: attrs)
+    }
+}

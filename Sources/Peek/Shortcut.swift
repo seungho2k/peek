@@ -18,9 +18,11 @@ struct Shortcut: Codable, Equatable, Hashable {
 
     var modifierFlags: NSEvent.ModifierFlags { NSEvent.ModifierFlags(rawValue: modifiers) }
 
-    /// ⌘H/J/K/L are fixed arrow keys in the editor, so they can't be assigned to anything else.
+    /// ⌘H/J/K/L are fixed arrow keys and ⌘0–⌘9 jump to sections, so they can't be assigned.
     static let arrowKeyCodes: Set<UInt16> = [KeyCode.h, KeyCode.j, KeyCode.k, KeyCode.l]
-    var isReservedArrow: Bool { modifierFlags == .command && Self.arrowKeyCodes.contains(keyCode) }
+    var isReserved: Bool {
+        modifierFlags == .command && (Self.arrowKeyCodes.contains(keyCode) || KeyCode.digits.contains(keyCode))
+    }
 
     func matches(_ event: NSEvent) -> Bool {
         event.keyCode == keyCode
@@ -42,6 +44,8 @@ enum KeyCode {
     static let a: UInt16 = 0, b: UInt16 = 11, d: UInt16 = 2, c: UInt16 = 8, h: UInt16 = 4, j: UInt16 = 38, k: UInt16 = 40, l: UInt16 = 37
     static let p: UInt16 = 35, q: UInt16 = 12, v: UInt16 = 9, x: UInt16 = 7, z: UInt16 = 6
     static let zero: UInt16 = 29, one: UInt16 = 18, two: UInt16 = 19, three: UInt16 = 20
+    /// Key codes of the digit keys 0–9, in order.
+    static let digits: [UInt16] = [29, 18, 19, 20, 21, 23, 22, 26, 28, 25]
     static let minus: UInt16 = 27, space: UInt16 = 49, returnKey: UInt16 = 36, comma: UInt16 = 43, escape: UInt16 = 53
 }
 

@@ -54,6 +54,10 @@ enum SelfTest {
         autoBold()
         strike()
         arrowKeys()
+        scrollPastEnd()
+        ruleSnap()
+        sectionJump()
+        windowRoomGeometry()
         releaseFixes()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
@@ -417,7 +421,7 @@ enum SelfTest {
     private static func settingsText() {
         let formatted = SettingsText.format(Settings.shared)
         let (changes, invalid) = SettingsText.parse(formatted)
-        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 10)
+        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 13)
 
         for (text, code, mods) in [("cmd+-", KeyCode.minus, NSEvent.ModifierFlags.command),
                                    ("opt+space", KeyCode.space, .option),
@@ -474,6 +478,150 @@ enum SelfTest {
         type(off, "title")
         check("option off: plain", off, "title")
         NoteFormat.autoBoldFirstLine = saved
+    }
+
+    private static func scrollPastEnd() {
+        let editor = NoteEditor(loadFromDisk: false)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 400), styleMask: [.borderless], backing: .buffered, defer: true)
+        editor.scrollView.frame = window.contentView!.bounds
+        window.contentView!.addSubview(editor.scrollView)
+        let tv = editor.textView
+        func maxScroll() -> CGFloat { tv.frame.height - editor.scrollView.contentView.bounds.height }
+        func top(_ loc: Int) -> CGFloat {
+            tv.layoutManager!.lineFragmentRect(forGlyphAt: tv.layoutManager!.glyphIndexForCharacter(at: loc), effectiveRange: nil).minY
+        }
+
+        tv.load(markdown: "a\nb\nc")
+        expect("short note scrolls until its last line is at the top (\(maxScroll()))", maxScroll() == top(4) && top(4) > 0)
+        tv.load(markdown: "a\nb\n")
+        expect("trailing empty line counts as the last line", maxScroll() == tv.layoutManager!.extraLineFragmentRect.minY)
+        tv.load(markdown: "")
+        expect("empty note doesn't scroll", maxScroll() == 0)
+
+        tv.load(markdown: (0..<200).map { "line \($0)" }.joined(separator: "\n"))
+        let last = (tv.string as NSString).length - 1
+        expect("long note: last line can reach the top", abs(maxScroll() - top(last)) < 0.5)
+        tv.setSelectedRange(NSRange(location: last + 1, length: 0))
+        tv.insertText("\n", replacementRange: NSRange(location: NSNotFound, length: 0))
+        expect("typing a new last line extends the scroll", abs(maxScroll() - tv.layoutManager!.extraLineFragmentRect.minY) < 0.5)
+
+        editor.scrollView.frame.size.height = 200
+        expect("panel height change resizes the view", abs(maxScroll() - tv.layoutManager!.extraLineFragmentRect.minY) < 0.5)
+    }
+
+    private static func ruleSnap() {
+        let editor = NoteEditor(loadFromDisk: false)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 100), styleMask: [.borderless], backing: .buffered, defer: true)
+        editor.scrollView.frame = window.contentView!.bounds
+        window.contentView!.addSubview(editor.scrollView)
+        let tv = editor.textView, sv = editor.scrollView
+        tv.load(markdown: "a\nb\n---\nc\nd\ne\n---\nf\n")
+        let rules = tv.ruleSnapOffsets()
+        expect("one stop per rule (\(rules))", rules.count == 2 && rules[0] > 0 && rules[1] > rules[0])
+
+        // At a stop the rule is just past the top edge and the section's text starts at the
+        // same inset as line 00 at the top of the note.
+        let rep = tv.bitmapImageRepForCachingDisplay(in: tv.bounds)!
+        tv.cacheDisplay(in: tv.bounds, to: rep)
+        let scale = CGFloat(rep.pixelsHigh) / rep.size.height
+        let drawn = (0..<rep.pixelsHigh).filter { (rep.colorAt(x: rep.pixelsWide / 2, y: $0)?.alphaComponent ?? 0) > 0 }
+            .map { CGFloat($0) / scale }
+        let ruleRows = drawn.filter { $0 > rules[0] - 15 && $0 < rules[0] + 1 }
+        expect("rule line is hidden just above the stop (\(rules[0]) vs \(ruleRows))", !ruleRows.isEmpty && ruleRows.max()! < rules[0])
+        let lm = tv.layoutManager!
+        let cTop = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: 6), effectiveRange: nil).minY + tv.textContainerOrigin.y
+        let aTop = lm.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil).minY + tv.textContainerOrigin.y
+        expect("section text starts at the same inset as the note's first line", cTop - rules[0] == aTop)
+
+        func y() -> CGFloat { sv.contentView.bounds.origin.y }
+        sv.step(up: false, rules: rules, animated: false)
+        expect("down: first rule on the top edge", y() == rules[0])
+        sv.step(up: false, rules: rules, animated: false)
+        expect("down again: next rule", y() == rules[1])
+        sv.step(up: false, rules: rules, animated: false)
+        expect("no stop past the last rule", y() == rules[1])
+        sv.step(up: true, rules: rules, animated: false)
+        sv.step(up: true, rules: rules, animated: false)
+        expect("up twice: back to the top", y() == 0)
+
+        sv.contentView.setBoundsOrigin(NSPoint(x: 0, y: rules[0] + 5))  // e.g. moved by typing
+        sv.step(up: true, rules: rules, animated: false)
+        expect("from between stops, up goes to the stop above", y() == rules[0])
+        expect("no rules: no stops", { tv.load(markdown: "a\nb"); return tv.ruleSnapOffsets().isEmpty }())
+    }
+
+    private static func sectionJump() {
+        let editor = NoteEditor(loadFromDisk: false)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 100), styleMask: [.borderless], backing: .buffered, defer: true)
+        editor.scrollView.frame = window.contentView!.bounds
+        window.contentView!.addSubview(editor.scrollView)
+        window.makeFirstResponder(editor.textView)
+        let tv = editor.textView, sv = editor.scrollView
+        tv.load(markdown: "a\nb\n---\nc\nd\ne\n---\nf\n" + (0..<20).map { "x\($0)" }.joined(separator: "\n"))
+        let rules = tv.ruleSnapOffsets()
+        func press(_ digit: Int) {
+            let code = KeyCode.digits[digit]
+            let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+                                     windowNumber: window.windowNumber, context: nil, characters: "\(digit)",
+                                     charactersIgnoringModifiers: "\(digit)", isARepeat: false, keyCode: code)!
+            tv.keyDown(with: e)
+        }
+        func y() -> CGFloat { sv.contentView.bounds.origin.y }
+        expect("section jump: one stop per section", sv.scroll(toSection: 2, rules: rules, animated: false) && y() == rules[1])
+        expect("cmd+0..2 jump to sections", { sv.scroll(toSection: 0, rules: rules, animated: false); return y() == 0 }()
+            && sv.scroll(toSection: 1, rules: rules, animated: false) && y() == rules[0])
+        expect("no section 3: stays put", !sv.scroll(toSection: 3, rules: rules, animated: false) && y() == rules[0])
+        let before = tv.markdown()
+        press(2)
+        expect("cmd+2 is handled without typing", tv.markdown() == before)
+
+        var labels: [(Int, CGFloat)] = []
+        tv.enumerateSectionStarts(in: NSRect(x: 0, y: 0, width: 300, height: 10000)) { labels.append(($0, $1)) }
+        let lm = tv.layoutManager!
+        func top(_ loc: Int) -> CGFloat { lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: loc), effectiveRange: nil).minY + tv.textContainerOrigin.y }
+        expect("index labels on each section's first line (\(labels.map(\.0)))", labels.map(\.0) == [0, 1, 2]
+            && labels.map(\.1) == [top(0), top(6), top(14)])
+        tv.load(markdown: "a\n---\n")
+        labels = []
+        tv.enumerateSectionStarts(in: NSRect(x: 0, y: 0, width: 300, height: 10000)) { labels.append(($0, $1)) }
+        expect("section after a trailing rule is labelled on its empty line", labels.map(\.0) == [0, 1])
+        tv.load(markdown: (0..<12).map { "s\($0)" }.joined(separator: "\n---\n"))
+        labels = []
+        tv.enumerateSectionStarts(in: NSRect(x: 0, y: 0, width: 300, height: 10000)) { labels.append(($0, $1)) }
+        expect("only sections 0–9 get a label (\(labels.map(\.0)))", labels.map(\.0) == Array(0...9))
+
+        expect("cmd+0–9 can't be assigned", SettingsText.parse("t\n\nrule: cmd+1\nbold: cmd+0").invalid == [2, 3])
+        expect("cmd+shift+1 still can", SettingsText.parse("t\n\nrule: cmd+shift+1").invalid.isEmpty)
+    }
+
+    private static func windowRoomGeometry() {
+        let usable = CGRect(x: 0, y: 25, width: 1000, height: 775)
+        let right = CGRect(x: 800, y: 25, width: 200, height: 775)
+        func f(_ w: CGRect, _ panel: CGRect = right, _ edge: PeekEdge = .right) -> CGRect? {
+            WindowRoom.clearedFrame(w, panel: panel, usable: usable, edge: edge)
+        }
+        expect("make-room: filled window shrinks to the panel", f(usable) == CGRect(x: 0, y: 25, width: 800, height: 775))
+        expect("make-room: window clear of the panel is left alone", f(CGRect(x: 100, y: 100, width: 500, height: 300)) == nil)
+        expect("make-room: small window under the panel moves left",
+               f(CGRect(x: 850, y: 100, width: 300, height: 300)) == CGRect(x: 500, y: 100, width: 300, height: 300))
+        expect("make-room: narrow leftover moves instead of shrinking to a sliver",
+               f(CGRect(x: 700, y: 100, width: 250, height: 300)) == CGRect(x: 550, y: 100, width: 250, height: 300))
+        expect("make-room: too wide to move is narrowed to fit",
+               f(CGRect(x: 650, y: 100, width: 900, height: 300)) == CGRect(x: 0, y: 100, width: 800, height: 300))
+        let left = CGRect(x: 0, y: 25, width: 200, height: 775)
+        expect("make-room: left edge mirrors", f(usable, left, .left) == CGRect(x: 200, y: 25, width: 800, height: 775)
+            && f(CGRect(x: 0, y: 100, width: 300, height: 300), left, .left) == CGRect(x: 200, y: 100, width: 300, height: 300))
+        expect("fill-window shortcut parses", SettingsText.parse("t\n\nfill-window: ctrl+opt+f").changes
+            == [.shortcut(.fillWindow, Shortcut(keyCode: 3, modifiers: [.control, .option]))])
+        expect("fill-window defaults to ctrl+opt+enter and is global, not a panel key",
+               ShortcutAction.fillWindow.defaultShortcut == Shortcut(keyCode: KeyCode.returnKey, modifiers: [.control, .option])
+               && ShortcutAction.fillWindow.isGlobal && !ShortcutAction.bold.isGlobal)
+        expect("filling next to the panel stops at the panel",
+               WindowRoom.clearedFrame(CGRect(x: 0, y: 25, width: 1000, height: 775), panel: CGRect(x: 800, y: 25, width: 200, height: 775),
+                                       usable: CGRect(x: 0, y: 25, width: 1000, height: 775), edge: .right)
+               == CGRect(x: 0, y: 25, width: 800, height: 775))
+        expect("animation setting parses", SettingsText.parse("t\n\nanimation: false").changes == [.animation(false)])
+        expect("make-room setting parses", SettingsText.parse("t\n\nmake-room: false").changes == [.makeRoom(false)])
     }
 
     private static func arrowKeys() {

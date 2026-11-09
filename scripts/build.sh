@@ -14,6 +14,10 @@ cp "$BIN_DIR/Peek" "$APP/Contents/MacOS/peek"
 cp Support/Info.plist "$APP/Contents/Info.plist"
 cp -R Support/Fonts "$APP/Contents/Resources/Fonts"
 cp Support/peek.icns "$APP/Contents/Resources/peek.icns"
-codesign --force --sign - "$APP" >/dev/null
+# Sign with the local "peek local" certificate when it exists (scripts/make-signing-cert.sh),
+# so the Accessibility permission survives rebuilds; otherwise ad-hoc.
+IDENTITY="-"
+if security find-certificate -c "peek local" >/dev/null 2>&1; then IDENTITY="peek local"; fi
+codesign --force --sign "$IDENTITY" "$APP" >/dev/null
 
 echo "$APP"

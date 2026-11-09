@@ -5,7 +5,7 @@ import AppKit
 /// can't be applied turn red. ⌘, or Esc goes back to the note.
 @MainActor
 final class SettingsEditor: NSObject, NSTextViewDelegate {
-    let scrollView = NSScrollView()
+    let scrollView = SnapScrollView()
     let textView: NoteTextView
     private let settings = Settings.shared
     /// Separate from the note's undo history (both views live in the same window).
@@ -34,6 +34,7 @@ final class SettingsEditor: NSObject, NSTextViewDelegate {
         textView.onEscape = { [weak self] in self?.onClose?() }
 
         scrollView.documentView = textView
+        scrollView.snapOffsets = { [weak textView] in textView?.ruleSnapOffsets() ?? [] }
         scrollView.hasVerticalScroller = false
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder

@@ -91,10 +91,39 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// Image and rule lines are not counted; numbering restarts at 00 after every rule.
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
+        // Section index (0–9, the ⌘-digit that jumps there) at the right of each section's first line.
+        enumerateSectionStarts(in: rect) { index, lineTop in
+            SectionIndexLabel.draw(index, rightEdge: bounds.width - Theme.spaceWidth, lineTop: lineTop)
+        }
         guard Theme.showLineNumbers else { return }
         let right = textContainerOrigin.x + Theme.gutterWidth - Theme.spaceWidth
         enumerateLineNumbers(in: rect) { number, labelTop in
             LineNumberLabel.draw(number, rightEdge: right, top: labelTop)
+        }
+    }
+
+    /// Calls `body` with the index (0–9) and top y (view coordinates) of each section's first
+    /// line intersecting `rect`: the note's first line, and the line after each rule.
+    func enumerateSectionStarts(in rect: NSRect, _ body: (Int, CGFloat) -> Void) {
+        guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return }
+        let ns = storage.string as NSString
+        let originY = textContainerOrigin.y
+        var starts = [0]
+        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
+            guard value is RuleAttachment else { return }
+            starts.append(NSMaxRange(ns.paragraphRange(for: range)))
+            if starts.count >= 10 { stop.pointee = true }
+        }
+        for (index, start) in starts.enumerated() {
+            let top: CGFloat
+            if start < ns.length {
+                top = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: start), effectiveRange: nil).minY
+            } else if lm.extraLineFragmentTextContainer === tc || ns.length == 0 {
+                lm.ensureLayout(for: tc)
+                top = lm.extraLineFragmentRect.minY
+            } else { continue }
+            let y = top + originY
+                if y + Theme.lineMetrics.height >= rect.minY && y <= rect.maxY { body(index, y) }
         }
     }
 
@@ -135,6 +164,85 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
     /// The first click on the (unfocused) panel both focuses it and places the caret.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    // MARK: Scroll past end
+
+    /// Like VS Code's "scroll beyond last line": the view is tall enough that the last numbered
+    /// line can be scrolled up to the top, where it sits at the same inset as line 00 does.
+    /// NSTextView sizes itself to its content (never below the clip view); this adds the extra.
+    override func setFrameSize(_ newSize: NSSize) {
+        var size = newSize
+        if !isSizingForScroll, let clip = enclosingScrollView?.contentView {
+            isSizingForScroll = true
+            size.height = max(size.height, lastNumberedLineTop() + clip.bounds.height)
+            isSizingForScroll = false
+        }
+        super.setFrameSize(size)
+    }
+    private var isSizingForScroll = false
+
+    /// NSTextView only resizes when its natural height changes, which a short note's never does
+    /// (it stays at the clip height): recompute after layout, loads and panel resizes.
+    func updateScrollPastEnd() {
+        guard !isSizingForScroll, let lm = layoutManager, let tc = textContainer else { return }
+        let natural = lm.usedRect(for: tc).height + 2 * textContainerInset.height
+        let size = NSSize(width: frame.width, height: natural)
+        setFrameSize(size)
+    }
+    private var clipObserver: NSObjectProtocol?
+
+    /// The panel's height can change without the text changing (another screen): resize then too.
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if let clipObserver { NotificationCenter.default.removeObserver(clipObserver) }
+        clipObserver = nil
+        guard let clip = superview as? NSClipView else { return }
+        clip.postsFrameChangedNotifications = true
+        clipObserver = NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification, object: clip, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateScrollPastEnd() }
+        }
+    }
+
+    /// Scroll offsets for each rule: the rule itself goes just past the top edge, so the panel's
+    /// own edge stands in for it, and the text below starts at the same inset as line 00 does
+    /// at the top of the note. (A rule drawn on the edge never looks like the edge: in dark mode
+    /// it adds to the window's rim, in light mode there is no rim at all.)
+    func ruleSnapOffsets() -> [CGFloat] {
+        guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return [] }
+        var rules: [Int] = []
+        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            if value is RuleAttachment { rules.append(range.location) }
+        }
+        guard let last = rules.last else { return [] }
+        // Non-contiguous layout only estimates positions below unlaid-out text: lay out up to the
+        // last rule so the offsets are exact.
+        lm.ensureLayout(forCharacterRange: NSRange(location: 0, length: last + 1))
+        return rules.map { location in
+            let glyph = lm.glyphIndexForCharacter(at: location)
+            return lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil).maxY
+        }
+    }
+
+    /// Top (container coordinates) of the last line that gets a line number: the empty line
+    /// after a trailing newline, or else the last text paragraph's first line.
+    func lastNumberedLineTop() -> CGFloat {
+        guard let lm = layoutManager, let tc = textContainer, let storage = textStorage else { return 0 }
+        let ns = storage.string as NSString
+        // Lay out just the end (layout is non-contiguous, so long notes stay cheap).
+        lm.ensureLayout(forCharacterRange: NSRange(location: max(0, ns.length - 1), length: min(1, ns.length)))
+        if lm.extraLineFragmentTextContainer === tc { return lm.extraLineFragmentRect.minY }
+        var end = ns.length
+        while end > 0 {
+            let paragraph = ns.paragraphRange(for: NSRange(location: end - 1, length: 0))
+            if storage.attribute(.attachment, at: paragraph.location, effectiveRange: nil) == nil {
+                return lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: paragraph.location), effectiveRange: nil).minY
+            }
+            end = paragraph.location
+        }
+        return 0
+    }
+
     // MARK: Load / save
 
     func load(markdown: String) {
@@ -146,6 +254,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         let loc = min(oldSelection.location, storage.length)
         setSelectedRange(NSRange(location: loc, length: 0))
         resetTypingAttributes()
+        updateScrollPastEnd()
     }
 
     func markdown() -> String {
@@ -171,6 +280,13 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
                 } ?? editedRange
             }
         }
+    }
+
+    nonisolated func layoutManager(
+        _ layoutManager: NSLayoutManager, didCompleteLayoutFor textContainer: NSTextContainer?, atEnd layoutFinishedFlag: Bool
+    ) {
+        guard layoutFinishedFlag else { return }
+        MainActor.assumeIsolated { updateScrollPastEnd() }
     }
 
     /// Fixed metrics for text lines (see `Theme.lineMetrics`); image/rule lines keep their own.
@@ -532,6 +648,12 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
                 move(nil)
                 return true
             }
+            // Cmd + 0–9 → scroll to that section (fixed).
+            if let index = KeyCode.digits.firstIndex(of: event.keyCode) {
+                commitComposition()
+                (enclosingScrollView as? SnapScrollView)?.scroll(toSection: index, rules: ruleSnapOffsets())
+                return true
+            }
         }
 
         if let action = Settings.shared.action(matching: event) {
@@ -613,7 +735,7 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         case .bold: toggleBold()
         case .strike: toggleStrike()
         case .rule: insertRule()
-        case .pin: break  // global hotkey, handled by PanelController
+        case .pin, .fillWindow: break  // global hotkeys, handled by PanelController
         case .settings: onOpenSettings?()
         }
     }

@@ -10,6 +10,12 @@ final class PanelController: NSObject {
     private let settings = Settings.shared
     private let resizeHandle = ResizeHandle()
     private let hotKey = GlobalHotKey()
+    /// Global hotkey that fills the focused window of another app (`fill-window`).
+    private let fillHotKey = GlobalHotKey()
+    /// Moves other windows out of the panel's way while it's shown (`make-room`).
+    private let windowRoom = WindowRoom()
+    /// The Accessibility prompt is shown at most once per launch.
+    private var askedForAccessibility = false
 
     /// 0 = fully hidden, 1 = fully shown.
     private var progress: CGFloat = 0
@@ -45,7 +51,12 @@ final class PanelController: NSObject {
 
         hotKey.onPress = { [weak self] in self?.hotKeyPressed() }
         hotKey.register(settings.shortcut(for: .pin))
-        settings.canUseGlobalShortcut = { [weak self] sc in self?.hotKey.register(sc) ?? false }
+        fillHotKey.onPress = { [weak self] in self?.fillFocusedWindow() }
+        fillHotKey.register(settings.shortcut(for: .fillWindow))
+        settings.canUseGlobalShortcut = { [weak self] action, sc in
+            guard let self else { return false }
+            return (action == .pin ? self.hotKey : self.fillHotKey).register(sc)
+        }
         editor.textView.onOpenSettings = { [weak self] in self?.toggleSettings() }
         settingsEditor.onClose = { [weak self] in self?.hideSettings() }
 
@@ -105,7 +116,10 @@ final class PanelController: NSObject {
 
     private func observeSettings() {
         settings.$shortcuts.dropFirst().sink { [weak self] shortcuts in
-            DispatchQueue.main.async { self?.hotKey.register(shortcuts[.pin] ?? ShortcutAction.pin.defaultShortcut) }
+            DispatchQueue.main.async {
+                self?.hotKey.register(shortcuts[.pin] ?? ShortcutAction.pin.defaultShortcut)
+                self?.fillHotKey.register(shortcuts[.fillWindow] ?? ShortcutAction.fillWindow.defaultShortcut)
+            }
         }.store(in: &cancellables)
         settings.$showLineNumbers.dropFirst().sink { [weak self] on in
             DispatchQueue.main.async {
@@ -120,6 +134,19 @@ final class PanelController: NSObject {
         settings.$minDepth.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async {
                 self?.applyFrame()
+            }
+        }.store(in: &cancellables)
+        settings.$makeRoom.dropFirst().sink { [weak self] on in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if on {
+                    self.makeRoom()
+                    if self.target == 1 { self.windowRoom.startWatching { [weak self] in self?.scheduleRefit() } }
+                } else {
+                    self.refitWork?.cancel()
+                    self.windowRoom.stopWatching()
+                    self.windowRoom.restore()
+                }
             }
         }.store(in: &cancellables)
         settings.$edge.dropFirst().sink { [weak self] _ in
@@ -190,13 +217,71 @@ final class PanelController: NSObject {
     // MARK: Show / hide
 
     func show() {
+        let wasHidden = target == 0
         if progress == 0 {
             if NoteStore.shared.hasExternalChange() { editor.reload() }
             applyFrame()
             panel.orderFrontRegardless()
         }
         animate(to: 1)
+        if wasHidden {
+            makeRoom()
+            if settings.makeRoom { windowRoom.startWatching { [weak self] in self?.scheduleRefit() } }
+        }
     }
+
+    /// A window moved, resized or appeared while peek is shown: fit windows again once things
+    /// settle (and the mouse is up, so a window being dragged isn't fought over).
+    private var refitWork: DispatchWorkItem?
+    private func scheduleRefit() {
+        refitWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if NSEvent.pressedMouseButtons != 0 { self.scheduleRefit(); return }
+                self.makeRoom()
+            }
+        }
+        refitWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
+
+    /// Moves other windows out of the panel's area (at its full size), if `make-room` is on.
+    private func makeRoom() {
+        guard settings.makeRoom, target == 1, let screen = targetScreen else { return }
+        guard WindowRoom.isTrusted else {
+            if !askedForAccessibility {
+                askedForAccessibility = true
+                WindowRoom.requestTrust()
+            }
+            return
+        }
+        windowRoom.makeRoom(panel: frame(on: screen), screen: screen, edge: settings.edge)
+    }
+
+    /// `fill-window`: the focused window of the app in front (or, if that's peek, of the app
+    /// before it) fills its screen edge to edge, minus the panel while peek is shown there.
+    func fillFocusedWindow() {
+        guard WindowRoom.isTrusted else {
+            if !askedForAccessibility {
+                askedForAccessibility = true
+                WindowRoom.requestTrust()
+            }
+            return
+        }
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        var app = NSWorkspace.shared.frontmostApplication
+        if app?.processIdentifier == ownPID { app = previousApp }
+        guard let pid = app?.processIdentifier, pid != ownPID else { return }
+        var panelArea: (frame: NSRect, edge: PeekEdge, remember: Bool)?
+        if target == 1, let screen = targetScreen {
+            panelArea = (frame(on: screen), settings.edge, settings.makeRoom)
+        }
+        windowRoom.fillFocusedWindow(of: pid, panel: panelArea)
+    }
+
+    /// Puts other windows back (quitting peek).
+    func restoreWindows() { windowRoom.restoreAndWait() }
 
     /// ⌘, (or launching peek again): the note panel shows the settings instead of the note
     /// (same width); opens the panel if needed.
@@ -233,13 +318,35 @@ final class PanelController: NSObject {
         // Don't leave a half-composed syllable behind.
         editor.textView.commitComposition()
         settingsEditor.textView.commitComposition()
+        refitWork?.cancel()
+        windowRoom.stopWatching()
+        windowRoom.restore()
+        // Hand focus back, unless the user has since switched to another app themselves.
+        if NSApp.isActive, let previous = previousApp, !previous.isTerminated { previous.activate() }
+        previousApp = nil
         animate(to: 0)
     }
 
-    /// Global hotkey: show (without taking focus) or hide. The panel stays until toggled off;
-    /// clicking it focuses it like any window.
+    /// Global hotkey: show and focus the panel (so ⌘1, ⌘, … work right away), or hide it and
+    /// give focus back to the app that had it.
     func hotKeyPressed() {
-        if target == 0 { show() } else { hide() }
+        if target == 0 {
+            show()
+            focusPanel()
+        } else {
+            hide()
+        }
+    }
+
+    /// The app that was frontmost when the hotkey focused peek; it gets focus back on hide.
+    private var previousApp: NSRunningApplication?
+
+    private func focusPanel() {
+        let front = NSWorkspace.shared.frontmostApplication
+        if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
+        NSApp.activate()
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(settingsOpen ? settingsEditor.textView : editor.textView)
     }
 
     // MARK: Animation
@@ -250,7 +357,7 @@ final class PanelController: NSObject {
         animStart = CACurrentMediaTime()
         let ms = newTarget > progress ? Settings.slideInMs : Settings.slideOutMs
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        animDuration = reduceMotion ? 0 : ms / 1000 * Double(abs(newTarget - progress))
+        animDuration = reduceMotion || !settings.animation ? 0 : ms / 1000 * Double(abs(newTarget - progress))
 
         if animDuration <= 0 {
             progress = newTarget
@@ -302,6 +409,7 @@ final class PanelController: NSObject {
             liveDepth = d
         }
         applyFrame()
+        if persist { makeRoom() }  // re-fit other windows to the new width
     }
 
     private func commitLiveDepth() {
@@ -352,6 +460,8 @@ final class PanelController: NSObject {
         liveDepth = nil
         applyFrame()
         layoutContent()
+        windowRoom.restore()
+        makeRoom()
     }
 
     @objc private func screensChanged() {
