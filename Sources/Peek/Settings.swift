@@ -29,7 +29,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .bold: Shortcut(keyCode: KeyCode.b, modifiers: .command)
         case .strike: Shortcut(keyCode: KeyCode.d, modifiers: .command)
-        case .rule: Shortcut(keyCode: KeyCode.l, modifiers: .command)
+        case .rule: Shortcut(keyCode: KeyCode.returnKey, modifiers: .command)
         case .pin: Shortcut(keyCode: KeyCode.space, modifiers: .option)
         case .settings: Shortcut(keyCode: KeyCode.comma, modifiers: .command)
         }
@@ -112,7 +112,10 @@ final class Settings: ObservableObject {
         if version < 5, sc[.rule] == Shortcut(keyCode: KeyCode.minus, modifiers: .command) { sc[.rule] = nil }
         // v5 defaulted strike to ⌘⇧X; it's ⌘D now.
         if version < 6, sc[.strike] == Shortcut(keyCode: KeyCode.x, modifiers: [.command, .shift]) { sc[.strike] = nil }
-        defaults.set(6, forKey: "shortcutsVersion")
+        // v6 defaulted the rule to ⌘L; ⌘H/J/K/L are arrow keys now and the rule is ⌘↩.
+        // Any action still on a reserved arrow key goes back to its default.
+        if version < 7 { for (a, s) in sc where s.isReservedArrow { sc[a] = nil } }
+        defaults.set(7, forKey: "shortcutsVersion")
         for a in ShortcutAction.allCases where sc[a] == nil { sc[a] = a.defaultShortcut }
         shortcuts = sc
 

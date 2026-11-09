@@ -53,6 +53,7 @@ enum SelfTest {
         settingsText()
         autoBold()
         strike()
+        arrowKeys()
         releaseFixes()
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
@@ -473,6 +474,32 @@ enum SelfTest {
         type(off, "title")
         check("option off: plain", off, "title")
         NoteFormat.autoBoldFirstLine = saved
+    }
+
+    private static func arrowKeys() {
+        func press(_ tv: NoteTextView, _ code: UInt16, _ ch: String, _ mods: NSEvent.ModifierFlags) {
+            let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: mods, timestamp: 0,
+                                     windowNumber: tv.window?.windowNumber ?? 0, context: nil, characters: ch,
+                                     charactersIgnoringModifiers: ch, isARepeat: false, keyCode: code)!
+            tv.keyDown(with: e)
+        }
+        let tv = makeView("abc\ndef")
+        caret(tv, 1)
+        press(tv, KeyCode.l, "l", .command)
+        expect("cmd+l moves right (no rule)", tv.selectedRange().location == 2 && tv.markdown() == "abc\ndef")
+        press(tv, KeyCode.h, "h", .command)
+        expect("cmd+h moves left", tv.selectedRange().location == 1)
+        press(tv, KeyCode.j, "j", .command)
+        expect("cmd+j moves down", tv.selectedRange().location == 5)
+        press(tv, KeyCode.k, "k", .command)
+        expect("cmd+k moves up", tv.selectedRange().location == 1)
+        press(tv, KeyCode.returnKey, "\r", .command)
+        type(tv, "x")
+        check("cmd+enter inserts a rule by default", tv, "abc\n---\nx\ndef")
+
+        expect("rule defaults to cmd+enter", ShortcutAction.rule.defaultShortcut == Shortcut(keyCode: KeyCode.returnKey, modifiers: .command))
+        expect("cmd+h/j/k/l can't be assigned", SettingsText.parse("t\n\nrule: cmd+l\nbold: cmd+h").invalid == [2, 3])
+        expect("cmd+shift+l still can", SettingsText.parse("t\n\nrule: cmd+shift+l").invalid.isEmpty)
     }
 
     private static func strike() {

@@ -18,6 +18,10 @@ struct Shortcut: Codable, Equatable, Hashable {
 
     var modifierFlags: NSEvent.ModifierFlags { NSEvent.ModifierFlags(rawValue: modifiers) }
 
+    /// ⌘H/J/K/L are fixed arrow keys in the editor, so they can't be assigned to anything else.
+    static let arrowKeyCodes: Set<UInt16> = [KeyCode.h, KeyCode.j, KeyCode.k, KeyCode.l]
+    var isReservedArrow: Bool { modifierFlags == .command && Self.arrowKeyCodes.contains(keyCode) }
+
     func matches(_ event: NSEvent) -> Bool {
         event.keyCode == keyCode
             && event.modifierFlags.intersection(Self.relevantModifiers).rawValue == modifiers

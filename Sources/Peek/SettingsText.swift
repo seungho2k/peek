@@ -128,7 +128,8 @@ enum SettingsText {
         default:
             guard let action = shortcutKeys.first(where: { $0.key == key })?.action else { return .unknownKey }
             guard let sc = ShortcutText.parse(value),
-                  !sc.modifierFlags.intersection([.command, .control, .option]).isEmpty
+                  !sc.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+                  !sc.isReservedArrow  // cmd+h/j/k/l move the caret
             else { return .badValue }
             return .ok(.shortcut(action, sc))
         }

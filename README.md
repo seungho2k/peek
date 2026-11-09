@@ -13,7 +13,8 @@ scripts/install.sh   # builds, installs to /Applications, launches
 - `opt+space` show / hide
 - `cmd+b` bold
 - `cmd+d` strikethrough
-- `cmd+l` rule
+- `cmd+enter` rule
+- `cmd+h/j/k/l` arrow keys
 - `cmd+,` settings (plain text, applies as you type)
 
 Your note is at `~/Library/Application Support/peek/note.md`.

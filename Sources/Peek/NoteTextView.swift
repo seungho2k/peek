@@ -518,8 +518,8 @@ final class NoteTextView: NSTextView, NSTextStorageDelegate, NSLayoutManagerDele
         if handleQuickLookKey(event) { return true }
         let mods = event.modifierFlags.intersection(Shortcut.relevantModifiers)
 
-        // Ctrl + h/j/k/l → arrow keys (fixed).
-        if mods == .control {
+        // Cmd + h/j/k/l → arrow keys (fixed).
+        if mods == .command {
             let move: ((Any?) -> Void)? = switch event.keyCode {
             case KeyCode.h: moveLeft
             case KeyCode.j: moveDown
