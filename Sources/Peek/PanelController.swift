@@ -17,14 +17,10 @@ final class PanelController: NSObject {
     /// The Accessibility prompt is shown at most once per launch.
     private var askedForAccessibility = false
 
-    /// 0 = fully hidden, 1 = fully shown.
+    /// 0 = hidden, 1 = shown (the panel's opacity).
     private var progress: CGFloat = 0
-    /// Where the current animation is heading.
+    /// Whether the panel is (being) shown: 1, or hidden: 0.
     private var target: CGFloat = 0
-    private var animFrom: CGFloat = 0
-    private var animStart: CFTimeInterval = 0
-    private var animDuration: CFTimeInterval = 0
-    private var animTimer: Timer?
 
     /// Start of an ⌥-drag resize: mouse location and panel depth at mouse-down.
     private var optionResize: (point: NSPoint, depth: CGFloat)?
@@ -136,19 +132,6 @@ final class PanelController: NSObject {
                 self?.applyFrame()
             }
         }.store(in: &cancellables)
-        settings.$makeRoom.dropFirst().sink { [weak self] on in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if on {
-                    self.makeRoom()
-                    if self.target == 1 { self.windowRoom.startWatching { [weak self] in self?.scheduleRefit() } }
-                } else {
-                    self.refitWork?.cancel()
-                    self.windowRoom.stopWatching()
-                    self.windowRoom.restore()
-                }
-            }
-        }.store(in: &cancellables)
         settings.$edge.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async { self?.edgeChanged() }
         }.store(in: &cancellables)
@@ -223,10 +206,10 @@ final class PanelController: NSObject {
             applyFrame()
             panel.orderFrontRegardless()
         }
-        animate(to: 1)
+        transition(to: 1)
         if wasHidden {
             makeRoom()
-            if settings.makeRoom { windowRoom.startWatching { [weak self] in self?.scheduleRefit() } }
+            windowRoom.startWatching { [weak self] in self?.scheduleRefit() }
         }
     }
 
@@ -246,9 +229,9 @@ final class PanelController: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
     }
 
-    /// Moves other windows out of the panel's area (at its full size), if `make-room` is on.
+    /// Moves other windows out of the panel's area (at its full size).
     private func makeRoom() {
-        guard settings.makeRoom, target == 1, let screen = targetScreen else { return }
+        guard target == 1, let screen = targetScreen else { return }
         guard WindowRoom.isTrusted else {
             if !askedForAccessibility {
                 askedForAccessibility = true
@@ -275,7 +258,7 @@ final class PanelController: NSObject {
         guard let pid = app?.processIdentifier, pid != ownPID else { return }
         var panelArea: (frame: NSRect, edge: PeekEdge, remember: Bool)?
         if target == 1, let screen = targetScreen {
-            panelArea = (frame(on: screen), settings.edge, settings.makeRoom)
+            panelArea = (frame(on: screen), settings.edge, true)
         }
         windowRoom.fillFocusedWindow(of: pid, panel: panelArea)
     }
@@ -324,7 +307,7 @@ final class PanelController: NSObject {
         // Hand focus back, unless the user has since switched to another app themselves.
         if NSApp.isActive, let previous = previousApp, !previous.isTerminated { previous.activate() }
         previousApp = nil
-        animate(to: 0)
+        transition(to: 0)
     }
 
     /// Global hotkey: show and focus the panel (so ⌘1, ⌘, … work right away), or hide it and
@@ -349,44 +332,17 @@ final class PanelController: NSObject {
         panel.makeFirstResponder(settingsOpen ? settingsEditor.textView : editor.textView)
     }
 
-    // MARK: Animation
+    // MARK: Show / hide state
 
-    private func animate(to newTarget: CGFloat) {
+    /// Shows or hides the panel at once (no fade).
+    private func transition(to newTarget: CGFloat) {
         target = newTarget
-        animFrom = progress
-        animStart = CACurrentMediaTime()
-        let ms = newTarget > progress ? Settings.slideInMs : Settings.slideOutMs
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        animDuration = reduceMotion || !settings.animation ? 0 : ms / 1000 * Double(abs(newTarget - progress))
-
-        if animDuration <= 0 {
-            progress = newTarget
-            applyFrame()
-            finishAnimation()
-            return
-        }
-        if animTimer == nil {
-            let timer = Timer(timeInterval: 1.0 / 120.0, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.tick() }
-            }
-            RunLoop.main.add(timer, forMode: .common)
-            animTimer = timer
-        }
-    }
-
-    private func tick() {
-        let t = min(1, (CACurrentMediaTime() - animStart) / animDuration)
-        let eased = target == 1 ? 1 - pow(1 - t, 3) : pow(t, 3)  // ease-out in, ease-in out
-        progress = animFrom + (target - animFrom) * CGFloat(eased)
+        progress = newTarget
         applyFrame()
-        if t >= 1 {
-            animTimer?.invalidate()
-            animTimer = nil
-            finishAnimation()
-        }
+        finishTransition()
     }
 
-    private func finishAnimation() {
+    private func finishTransition() {
         if target == 0 {
             panel.orderOut(nil)
             editor.saveNow()

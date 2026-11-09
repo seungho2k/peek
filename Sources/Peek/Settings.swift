@@ -53,9 +53,6 @@ final class Settings: ObservableObject {
     @Published var edge: PeekEdge {
         didSet { defaults.set(edge.rawValue, forKey: "edge") }
     }
-    /// Slide-in/out durations in milliseconds (fixed; no longer a setting).
-    static let slideInMs: Double = 100
-    static let slideOutMs: Double = 100
     /// Panel width when peeking from the left or right edge.
     @Published var sideWidth: CGFloat {
         didSet { defaults.set(Double(sideWidth), forKey: "sideWidth") }
@@ -63,14 +60,6 @@ final class Settings: ObservableObject {
     /// Checks whether a global shortcut can be registered (set by the panel controller).
     var canUseGlobalShortcut: ((ShortcutAction, Shortcut) -> Bool)?
 
-    /// While peek is shown, other windows are moved out of its way (and put back when it hides).
-    @Published var makeRoom: Bool {
-        didSet { defaults.set(makeRoom, forKey: "makeRoom") }
-    }
-    /// Fade the panel in and out; false shows/hides it instantly.
-    @Published var animation: Bool {
-        didSet { defaults.set(animation, forKey: "animation") }
-    }
     /// Show line numbers in the left gutter (note and settings).
     @Published var showLineNumbers: Bool {
         didSet { defaults.set(showLineNumbers, forKey: "showLineNumbers") }
@@ -104,8 +93,7 @@ final class Settings: ObservableObject {
         autoBoldFirstLine = defaults.object(forKey: "autoBoldFirstLine") as? Bool ?? true
         defaults.removeObject(forKey: "lineNumbers")  // old key
         showLineNumbers = defaults.object(forKey: "showLineNumbers") as? Bool ?? true
-        makeRoom = defaults.object(forKey: "makeRoom") as? Bool ?? true
-        animation = defaults.object(forKey: "animation") as? Bool ?? true
+        for old in ["makeRoom", "animation"] { defaults.removeObject(forKey: old) }  // now fixed: on / off
 
         var sc: [ShortcutAction: Shortcut] = [:]
         if let data = defaults.data(forKey: "shortcuts"),
