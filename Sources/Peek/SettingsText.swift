@@ -27,8 +27,6 @@ enum SettingsText {
                 ("launch-at-login", "\(s.launchAtLogin)"),
                 ("bold-first-line", "\(s.autoBoldFirstLine)"),
                 ("line-numbers", "\(s.showLineNumbers)"),
-                ("make-room", "\(s.makeRoom)"),
-                ("animation", "\(s.animation)"),
             ]),
             ("keyboard shortcuts", shortcutKeys.map { ($0.key, ShortcutText.format(s.shortcut(for: $0.action))) }),
         ]
@@ -43,8 +41,6 @@ enum SettingsText {
         case launchAtLogin(Bool)
         case autoBoldFirstLine(Bool)
         case lineNumbers(Bool)
-        case makeRoom(Bool)
-        case animation(Bool)
         case shortcut(ShortcutAction, Shortcut)
     }
 
@@ -130,10 +126,6 @@ enum SettingsText {
             return bool(value).map { .ok(.autoBoldFirstLine($0)) } ?? .badValue
         case "line-numbers":
             return bool(value).map { .ok(.lineNumbers($0)) } ?? .badValue
-        case "make-room":
-            return bool(value).map { .ok(.makeRoom($0)) } ?? .badValue
-        case "animation":
-            return bool(value).map { .ok(.animation($0)) } ?? .badValue
         default:
             guard let action = shortcutKeys.first(where: { $0.key == key })?.action else { return .unknownKey }
             guard let sc = ShortcutText.parse(value),
@@ -161,8 +153,6 @@ enum SettingsText {
             case .launchAtLogin(let on): if s.launchAtLogin != on { s.launchAtLogin = on }
             case .autoBoldFirstLine(let on): if s.autoBoldFirstLine != on { s.autoBoldFirstLine = on }
             case .lineNumbers(let on): if s.showLineNumbers != on { s.showLineNumbers = on }
-            case .makeRoom(let on): if s.makeRoom != on { s.makeRoom = on }
-            case .animation(let on): if s.animation != on { s.animation = on }
             case .shortcut(let action, let sc): if s.shortcut(for: action) != sc { s.shortcuts[action] = sc }
             }
         }

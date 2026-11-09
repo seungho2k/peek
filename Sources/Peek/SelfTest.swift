@@ -421,7 +421,7 @@ enum SelfTest {
     private static func settingsText() {
         let formatted = SettingsText.format(Settings.shared)
         let (changes, invalid) = SettingsText.parse(formatted)
-        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 13)
+        expect("formatted settings parse cleanly (\(changes.count) items)", invalid.isEmpty && changes.count == 11)
 
         for (text, code, mods) in [("cmd+-", KeyCode.minus, NSEvent.ModifierFlags.command),
                                    ("opt+space", KeyCode.space, .option),
@@ -620,8 +620,8 @@ enum SelfTest {
                WindowRoom.clearedFrame(CGRect(x: 0, y: 25, width: 1000, height: 775), panel: CGRect(x: 800, y: 25, width: 200, height: 775),
                                        usable: CGRect(x: 0, y: 25, width: 1000, height: 775), edge: .right)
                == CGRect(x: 0, y: 25, width: 800, height: 775))
-        expect("animation setting parses", SettingsText.parse("t\n\nanimation: false").changes == [.animation(false)])
-        expect("make-room setting parses", SettingsText.parse("t\n\nmake-room: false").changes == [.makeRoom(false)])
+        expect("make-room and animation are no longer settings",
+               SettingsText.parse("t\n\nmake-room: true\nanimation: true").invalid == [2, 3])
     }
 
     private static func arrowKeys() {
